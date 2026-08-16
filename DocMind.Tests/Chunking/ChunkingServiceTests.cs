@@ -46,6 +46,22 @@ public class ChunkingServiceTests
     }
 
     [Fact]
+    public void ChunkText_VeryShortText_ReturnsSingleChunkEvenBelowMinimum()
+    {
+        // A document with fewer tokens than minChunkTokens has no previous chunk to
+        // merge into or fall back on, so it must still be returned as-is rather than discarded.
+        var service = new ChunkingService(chunkSizeTokens: 500, overlapTokens: 75, minChunkTokens: 50);
+        var text = BuildTextWithExactTokenCount(10);
+
+        var chunks = service.ChunkText(text, "doc-very-short");
+
+        var chunk = Assert.Single(chunks);
+        Assert.Equal("doc-very-short", chunk.DocumentId);
+        Assert.Equal(0, chunk.SequenceNumber);
+        Assert.Equal(10, chunk.TokenCount);
+    }
+
+    [Fact]
     public void ChunkText_TrailingChunkBelowMinimum_IsMergedIntoPreviousChunk()
     {
         // chunkSize=10, overlap=3, step=7 -> ranges (0,10) then (7,total).
