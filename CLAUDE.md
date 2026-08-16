@@ -12,8 +12,13 @@ DocMind is a RAG (Retrieval-Augmented Generation) document Q&A system built on .
 
 The project is currently a bare scaffold (default template files, no domain code yet). The intended stack, not yet wired up:
 
-- **Semantic Kernel** for generating embeddings and calling OpenAI (chat completion).
+- **Semantic Kernel** for generating embeddings and chat completion, both via Ollama (local, no paid external dependencies — the project is 100% self-hosted):
+  - **Embeddings**: Ollama local, model `nomic-embed-text`.
+  - **Completion/Chat**: Ollama local, model `llama3.1`.
+  - Both served at `http://localhost:11434`.
 - **PdfPig** for extracting text from PDF documents.
+
+NuGet packages: `Microsoft.SemanticKernel.Connectors.Ollama` (no `Connectors.OpenAI`).
 
 As this scaffold is built out, prefer putting orchestration/business logic (chunking, embedding generation, retrieval, prompt construction) in DocMind.Core, keeping DocMind.Api as a thin HTTP layer over it.
 
@@ -50,3 +55,10 @@ dotnet test --filter "DisplayName~SomeMethod"
 - Target framework: `net9.0`, with `<Nullable>enable</Nullable>` and `<ImplicitUsings>enable</ImplicitUsings>` across all projects — write nullable-aware code and rely on implicit global usings rather than re-adding common `using` directives.
 - New cross-project code (chunking, embedding, retrieval, PDF parsing) belongs in DocMind.Core; DocMind.Api should only wire up minimal-API endpoints and DI, delegating to DocMind.Core services.
 - DocMind.Tests uses xUnit with the `Using Include="Xunit"` implicit global using already configured — no need to add `using Xunit;` per file.
+- El tokenizer para chunking usa encoding `cl100k_base` como estándar de referencia, aunque los modelos reales (`nomic-embed-text` y `llama3.1` vía Ollama) tienen su propio tokenizer interno — esto es una simplificación consciente para mantener consistencia en el tamaño de chunks sin agregar complejidad extra de otro tokenizer específico.
+
+## Requisitos locales
+
+- Ollama instalado y corriendo (verificar con: `ollama list`).
+- Modelos descargados: `nomic-embed-text` y `llama3.1`.
+- Sin necesidad de API keys ni variables de entorno de proveedores externos.
