@@ -1,6 +1,7 @@
-using Microsoft.ML.Tokenizers;
-
 namespace DocMind.Core.Chunking;
+
+
+using Microsoft.ML.Tokenizers;
 
 public class ChunkingService : IChunkingService
 {
@@ -8,10 +9,10 @@ public class ChunkingService : IChunkingService
     private const int DefaultOverlapTokens = 75;
     private const int DefaultMinChunkTokens = 50;
 
-    private readonly TiktokenTokenizer _tokenizer;
-    private readonly int _chunkSizeTokens;
-    private readonly int _overlapTokens;
-    private readonly int _minChunkTokens;
+    private readonly TiktokenTokenizer tokenizer;
+    private readonly int chunkSizeTokens;
+    private readonly int overlapTokens;
+    private readonly int minChunkTokens;
 
     public ChunkingService(
         int chunkSizeTokens = DefaultChunkSizeTokens,
@@ -20,31 +21,35 @@ public class ChunkingService : IChunkingService
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(chunkSizeTokens);
         if (overlapTokens < 0 || overlapTokens >= chunkSizeTokens)
+        {
             throw new ArgumentOutOfRangeException(nameof(overlapTokens));
+        }
 
-        _chunkSizeTokens = chunkSizeTokens;
-        _overlapTokens = overlapTokens;
-        _minChunkTokens = minChunkTokens;
-        _tokenizer = TiktokenTokenizer.CreateForEncoding("cl100k_base");
+        this.chunkSizeTokens = chunkSizeTokens;
+        this.overlapTokens = overlapTokens;
+        this.minChunkTokens = minChunkTokens;
+        this.tokenizer = TiktokenTokenizer.CreateForEncoding("cl100k_base");
     }
 
     public List<Chunk> ChunkText(string text, string sourceDocumentId)
     {
-        var ids = _tokenizer.EncodeToIds(text);
+        var ids = this.tokenizer.EncodeToIds(text);
         var totalTokens = ids.Count;
 
         var chunks = new List<Chunk>();
         if (totalTokens == 0)
+        {
             return chunks;
+        }
 
-        var ranges = BuildTokenRanges(totalTokens);
-        MergeOrDiscardTrailingSmallChunk(ranges);
+        var ranges = this.BuildTokenRanges(totalTokens);
+        this.MergeOrDiscardTrailingSmallChunk(ranges);
 
         for (var sequenceNumber = 0; sequenceNumber < ranges.Count; sequenceNumber++)
         {
             var (start, end) = ranges[sequenceNumber];
             var tokenSlice = ids.Skip(start).Take(end - start).ToArray();
-            var content = _tokenizer.Decode(tokenSlice);
+            var content = this.tokenizer.Decode(tokenSlice);
 
             chunks.Add(new Chunk(
                 Id: Guid.NewGuid(),
@@ -59,17 +64,19 @@ public class ChunkingService : IChunkingService
 
     private List<(int Start, int End)> BuildTokenRanges(int totalTokens)
     {
-        var step = _chunkSizeTokens - _overlapTokens;
+        var step = this.chunkSizeTokens - this.overlapTokens;
         var ranges = new List<(int Start, int End)>();
 
         var start = 0;
         while (true)
         {
-            var end = Math.Min(start + _chunkSizeTokens, totalTokens);
+            var end = Math.Min(start + this.chunkSizeTokens, totalTokens);
             ranges.Add((start, end));
 
             if (end >= totalTokens)
+            {
                 break;
+            }
 
             start += step;
         }
@@ -80,11 +87,15 @@ public class ChunkingService : IChunkingService
     private void MergeOrDiscardTrailingSmallChunk(List<(int Start, int End)> ranges)
     {
         if (ranges.Count <= 1)
+        {
             return;
+        }
 
         var (lastStart, lastEnd) = ranges[^1];
-        if (lastEnd - lastStart >= _minChunkTokens)
+        if (lastEnd - lastStart >= this.minChunkTokens)
+        {
             return;
+        }
 
         ranges.RemoveAt(ranges.Count - 1);
 

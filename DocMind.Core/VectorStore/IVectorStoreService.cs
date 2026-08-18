@@ -1,10 +1,9 @@
-using DocMind.Core.Chunking;
-
 namespace DocMind.Core.VectorStore;
+using DocMind.Core.Chunking;
 
 public interface IVectorStoreService
 {
-    void Add(Chunk chunk, float[] vector);
+    public void Add(Chunk chunk, float[] vector);
 
-    List<ScoredChunk> Search(float[] queryVector, int topK = 5);
+    public List<ScoredChunk> Search(float[] queryVector, int topK = 5);
 }

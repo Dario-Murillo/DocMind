@@ -1,15 +1,16 @@
+namespace DocMind.Tests.Documents;
+
+
 using System.Text;
 using DocMind.Core.Chunking;
 using DocMind.Core.Documents;
 using DocMind.Core.Embeddings;
 using DocMind.Core.VectorStore;
 
-namespace DocMind.Tests.Documents;
-
 public class DocumentServiceTests
 {
     [Fact]
-    public async Task IndexDocumentAsync_NullPdfStream_ThrowsArgumentException()
+    public async Task IndexDocumentAsyncNullPdfStreamThrowsArgumentException()
     {
         var service = CreateService(out _, out _, out _);
 
@@ -20,7 +21,7 @@ public class DocumentServiceTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task IndexDocumentAsync_NullOrEmptyFileName_ThrowsArgumentException(string? fileName)
+    public async Task IndexDocumentAsyncNullOrEmptyFileNameThrowsArgumentException(string? fileName)
     {
         var service = CreateService(out _, out _, out _);
         using var stream = new MemoryStream([1, 2, 3]);
@@ -29,7 +30,7 @@ public class DocumentServiceTests
     }
 
     [Fact]
-    public async Task IndexDocumentAsync_PdfWithoutExtractableText_ThrowsInvalidOperationException()
+    public async Task IndexDocumentAsyncPdfWithoutExtractableTextThrowsInvalidOperationException()
     {
         var service = CreateService(out _, out _, out _);
         using var stream = new MemoryStream(BuildMinimalPdf(content: string.Empty));
@@ -38,7 +39,7 @@ public class DocumentServiceTests
     }
 
     [Fact]
-    public async Task IndexDocumentAsync_ValidPdf_CallsChunkingThenEmbedsAndStoresEachChunkInOrder()
+    public async Task IndexDocumentAsyncValidPdfCallsChunkingThenEmbedsAndStoresEachChunkInOrder()
     {
         var callLog = new List<string>();
         var chunk1 = new Chunk(Guid.NewGuid(), "placeholder", "chunk one content", TokenCount: 3, SequenceNumber: 0);
@@ -70,7 +71,7 @@ public class DocumentServiceTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task IndexPlainTextAsync_NullOrEmptyText_ThrowsArgumentException(string? text)
+    public async Task IndexPlainTextAsyncNullOrEmptyTextThrowsArgumentException(string? text)
     {
         var service = CreateService(out _, out _, out _);
 
@@ -81,7 +82,7 @@ public class DocumentServiceTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task IndexPlainTextAsync_NullOrEmptyDocumentName_ThrowsArgumentException(string? documentName)
+    public async Task IndexPlainTextAsyncNullOrEmptyDocumentNameThrowsArgumentException(string? documentName)
     {
         var service = CreateService(out _, out _, out _);
 
@@ -89,7 +90,7 @@ public class DocumentServiceTests
     }
 
     [Fact]
-    public async Task IndexPlainTextAsync_ValidText_CallsChunkingThenEmbedsAndStoresEachChunkInOrder()
+    public async Task IndexPlainTextAsyncValidTextCallsChunkingThenEmbedsAndStoresEachChunkInOrder()
     {
         var callLog = new List<string>();
         var chunk1 = new Chunk(Guid.NewGuid(), "placeholder", "chunk one content", TokenCount: 3, SequenceNumber: 0);
@@ -163,7 +164,9 @@ public class DocumentServiceTests
         WriteAscii($"xref\n0 {objectCount}\n");
         WriteAscii("0000000000 65535 f \n");
         for (var i = 1; i < objectCount; i++)
+        {
             WriteAscii($"{offsets[i]:D10} 00000 n \n");
+        }
 
         WriteAscii($"trailer\n<< /Size {objectCount} /Root 1 0 R >>\nstartxref\n{xrefOffset}\n%%EOF");
 
@@ -177,8 +180,8 @@ public class DocumentServiceTests
 
         public List<Chunk> ChunkText(string text, string sourceDocumentId)
         {
-            ReceivedText = text;
-            ReceivedDocumentId = sourceDocumentId;
+            this.ReceivedText = text;
+            this.ReceivedDocumentId = sourceDocumentId;
             callLog.Add("Chunk");
             return chunksToReturn;
         }
@@ -200,7 +203,7 @@ public class DocumentServiceTests
         public void Add(Chunk chunk, float[] vector)
         {
             callLog.Add($"Add:{chunk.Content}");
-            AddedEntries.Add((chunk, vector));
+            this.AddedEntries.Add((chunk, vector));
         }
 
         public List<ScoredChunk> Search(float[] queryVector, int topK = 5) =>

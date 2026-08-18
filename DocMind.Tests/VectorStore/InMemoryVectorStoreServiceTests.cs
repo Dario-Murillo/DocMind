@@ -1,12 +1,13 @@
+namespace DocMind.Tests.VectorStore;
+
+
 using DocMind.Core.Chunking;
 using DocMind.Core.VectorStore;
-
-namespace DocMind.Tests.VectorStore;
 
 public class InMemoryVectorStoreServiceTests
 {
     [Fact]
-    public void Search_EmptyStore_ReturnsEmptyList()
+    public void SearchEmptyStoreReturnsEmptyList()
     {
         var store = new InMemoryVectorStoreService();
 
@@ -16,7 +17,7 @@ public class InMemoryVectorStoreServiceTests
     }
 
     [Fact]
-    public void Search_QueryIdenticalToStoredVector_ScoreIsCloseToOne()
+    public void SearchQueryIdenticalToStoredVectorScoreIsCloseToOne()
     {
         var store = new InMemoryVectorStoreService();
         var chunk = CreateChunk("doc1", 0);
@@ -30,7 +31,7 @@ public class InMemoryVectorStoreServiceTests
     }
 
     [Fact]
-    public void Search_MultipleChunks_ReturnsTopKOrderedByDescendingScore()
+    public void SearchMultipleChunksReturnsTopKOrderedByDescendingScore()
     {
         var store = new InMemoryVectorStoreService();
         var queryVector = new float[] { 1f, 0f };
@@ -56,7 +57,7 @@ public class InMemoryVectorStoreServiceTests
     }
 
     [Fact]
-    public void Search_TopKGreaterThanStoredCount_ReturnsAllWithoutError()
+    public void SearchTopKGreaterThanStoredCountReturnsAllWithoutError()
     {
         var store = new InMemoryVectorStoreService();
         store.Add(CreateChunk("doc1", 0), [1f, 0f]);
@@ -70,11 +71,11 @@ public class InMemoryVectorStoreServiceTests
     [Theory]
     [InlineData(null)]
     [InlineData(new float[0])]
-    public void Search_NullOrEmptyQueryVector_ThrowsArgumentException(float[]? queryVector)
+    public void SearchNullOrEmptyQueryVectorThrowsArgumentException(float[]? queryVector)
     {
         var store = new InMemoryVectorStoreService();
 
-        Assert.Throws<ArgumentException>(() => store.Search(queryVector!));
+        _ = Assert.Throws<ArgumentException>(() => store.Search(queryVector!));
     }
 
     private static Chunk CreateChunk(string documentId, int sequenceNumber) =>

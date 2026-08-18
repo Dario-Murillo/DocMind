@@ -2,5 +2,5 @@ namespace DocMind.Core.Embeddings;
 
 public interface IEmbeddingService
 {
-    Task<float[]> GenerateEmbeddingAsync(string text);
+    public Task<float[]> GenerateEmbeddingAsync(string text);
 }

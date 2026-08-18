@@ -1,8 +1,9 @@
-using DocMind.Core.Chunking;
-
 namespace DocMind.Core.Completion;
+
+
+using DocMind.Core.Chunking;
 
 public interface ICompletionService
 {
-    Task<string> GenerateAnswerAsync(string question, List<Chunk> contextChunks);
+    public Task<string> GenerateAnswerAsync(string question, List<Chunk> contextChunks);
 }

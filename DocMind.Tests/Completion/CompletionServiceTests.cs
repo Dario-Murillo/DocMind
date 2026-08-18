@@ -1,71 +1,61 @@
-using System.Text;
+namespace DocMind.Tests.Completion;
+
+
 using DocMind.Core.Chunking;
+using DocMind.Core.Completion;
 using Microsoft.Extensions.AI;
-using OllamaSharp;
 
-namespace DocMind.Core.Completion;
-
-public class CompletionService(IChatClient chatClient, Uri? endpoint = null, string modelId = CompletionService.DefaultModelId) : ICompletionService
+public class CompletionServiceTests
 {
-    public const string DefaultModelId = "llama3.1";
-    private static readonly Uri DefaultEndpoint = new("http://localhost:11434");
-
-    private readonly IChatClient _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
-    private readonly Uri _endpoint = endpoint ?? DefaultEndpoint;
-    private readonly string _modelId = modelId;
-
-    public CompletionService(Uri? endpoint = null, string modelId = DefaultModelId)
-        : this(new OllamaApiClient(endpoint ?? DefaultEndpoint, modelId), endpoint ?? DefaultEndpoint, modelId)
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task GenerateAnswerAsyncNullOrEmptyQuestionThrowsArgumentException(string? question)
     {
+        var service = new CompletionService(new UnreachableChatClient());
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GenerateAnswerAsync(question!, []));
     }
 
-    public async Task<string> GenerateAnswerAsync(string question, List<Chunk> contextChunks)
+    [Fact]
+    public async Task GenerateAnswerAsyncNullContextChunksThrowsArgumentException()
     {
-        if (string.IsNullOrWhiteSpace(question))
-            throw new ArgumentException("Question must not be null or empty.", nameof(question));
-        if (contextChunks is null)
-            throw new ArgumentException("Context chunks must not be null.", nameof(contextChunks));
+        var service = new CompletionService(new UnreachableChatClient());
 
-        var prompt = BuildPrompt(question, contextChunks);
-
-        try
-        {
-            var response = await _chatClient.GetResponseAsync(prompt);
-            return response.Text;
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
-        {
-            throw new InvalidOperationException(
-                $"Could not reach Ollama to generate the answer. Ensure Ollama is running ('ollama serve') at {_endpoint} and that the '{_modelId}' model is pulled ('ollama pull {_modelId}').",
-                ex);
-        }
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GenerateAnswerAsync("What is DocMind?", null!));
     }
 
-    private static string BuildPrompt(string question, List<Chunk> contextChunks)
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task GenerateAnswerAsyncValidQuestionWithContextReturnsNonEmptyAnswer()
     {
-        var prompt = new StringBuilder();
-        prompt.AppendLine("Answer the question using ONLY the context below.");
-        prompt.AppendLine("If the answer is not contained in the context, say that you don't have enough information to answer instead of making something up.");
-        prompt.AppendLine();
-        prompt.AppendLine("Context:");
-        prompt.AppendLine("---");
-
-        if (contextChunks.Count == 0)
+        // Requires a local Ollama instance running with the llama3.1 model pulled.
+        var service = new CompletionService();
+        var context = new List<Chunk>
         {
-            prompt.AppendLine("(no context available)");
-        }
-        else
+            new(Guid.NewGuid(), "doc1", "DocMind is a local, self-hosted RAG document Q&A system built on .NET 9.", TokenCount: 15, SequenceNumber: 0),
+        };
+
+        var answer = await service.GenerateAnswerAsync("What is DocMind?", context);
+
+        Assert.False(string.IsNullOrWhiteSpace(answer));
+    }
+
+    private sealed class UnreachableChatClient : IChatClient
+    {
+        public Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("GetResponseAsync must not be called for invalid input.");
+
+        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("GetStreamingResponseAsync must not be called for invalid input.");
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose()
         {
-            foreach (var chunk in contextChunks)
-            {
-                prompt.AppendLine(chunk.Content);
-                prompt.AppendLine("---");
-            }
         }
-
-        prompt.AppendLine();
-        prompt.Append("Question: ").Append(question);
-
-        return prompt.ToString();
     }
 }

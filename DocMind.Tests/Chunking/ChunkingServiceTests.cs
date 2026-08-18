@@ -1,15 +1,16 @@
+namespace DocMind.Tests.Chunking;
+
+
 using System.Text;
 using DocMind.Core.Chunking;
 using Microsoft.ML.Tokenizers;
-
-namespace DocMind.Tests.Chunking;
 
 public class ChunkingServiceTests
 {
     private static readonly TiktokenTokenizer Tokenizer = TiktokenTokenizer.CreateForEncoding("cl100k_base");
 
     [Fact]
-    public void ChunkText_ShortText_ReturnsSingleChunk()
+    public void ChunkTextShortTextReturnsSingleChunk()
     {
         var service = new ChunkingService();
         var text = BuildTextWithExactTokenCount(100);
@@ -23,7 +24,7 @@ public class ChunkingServiceTests
     }
 
     [Fact]
-    public void ChunkText_LongText_ConsecutiveChunksOverlapByConfiguredTokenCount()
+    public void ChunkTextLongTextConsecutiveChunksOverlapByConfiguredTokenCount()
     {
         const int overlapTokens = 75;
         var service = new ChunkingService(chunkSizeTokens: 500, overlapTokens: overlapTokens, minChunkTokens: 50);
@@ -46,7 +47,7 @@ public class ChunkingServiceTests
     }
 
     [Fact]
-    public void ChunkText_VeryShortText_ReturnsSingleChunkEvenBelowMinimum()
+    public void ChunkTextVeryShortTextReturnsSingleChunkEvenBelowMinimum()
     {
         // A document with fewer tokens than minChunkTokens has no previous chunk to
         // merge into or fall back on, so it must still be returned as-is rather than discarded.
@@ -62,7 +63,7 @@ public class ChunkingServiceTests
     }
 
     [Fact]
-    public void ChunkText_TrailingChunkBelowMinimum_IsMergedIntoPreviousChunk()
+    public void ChunkTextTrailingChunkBelowMinimumIsMergedIntoPreviousChunk()
     {
         // chunkSize=10, overlap=3, step=7 -> ranges (0,10) then (7,total).
         // With total=11 the trailing range is (7,11), 4 tokens, below minChunkTokens=5,

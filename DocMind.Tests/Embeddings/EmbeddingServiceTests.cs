@@ -1,7 +1,8 @@
+namespace DocMind.Tests.Embeddings;
+
+
 using DocMind.Core.Embeddings;
 using Microsoft.Extensions.AI;
-
-namespace DocMind.Tests.Embeddings;
 
 public class EmbeddingServiceTests
 {
@@ -9,7 +10,7 @@ public class EmbeddingServiceTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task GenerateEmbeddingAsync_NullOrEmptyText_ThrowsArgumentException(string? text)
+    public async Task GenerateEmbeddingAsyncNullOrEmptyTextThrowsArgumentException(string? text)
     {
         // A fake generator that throws if it is ever invoked proves validation
         // happens before any call reaches Ollama.
@@ -20,7 +21,7 @@ public class EmbeddingServiceTests
 
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task GenerateEmbeddingAsync_ValidText_ReturnsNonEmptyFloatArray()
+    public async Task GenerateEmbeddingAsyncValidTextReturnsNonEmptyFloatArray()
     {
         // Requires a local Ollama instance running with the nomic-embed-text model pulled.
         var service = new EmbeddingService();
