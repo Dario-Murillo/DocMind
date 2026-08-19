@@ -1,4 +1,6 @@
 namespace DocMind.Core.VectorStore;
+
+
 using DocMind.Core.Chunking;
 
 public interface IVectorStoreService
