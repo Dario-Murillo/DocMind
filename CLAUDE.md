@@ -56,6 +56,8 @@ dotnet test --filter "DisplayName~SomeMethod"
 - New cross-project code (chunking, embedding, retrieval, PDF parsing) belongs in DocMind.Core; DocMind.Api should only wire up minimal-API endpoints and DI, delegating to DocMind.Core services.
 - DocMind.Tests uses xUnit with the `Using Include="Xunit"` implicit global using already configured — no need to add `using Xunit;` per file.
 - The chunking tokenizer uses the `cl100k_base` encoding as a reference standard, even though the real models (`nomic-embed-text` and `llama3.1` via Ollama) have their own internal tokenizer — this is a deliberate simplification to keep chunk sizing consistent without adding the extra complexity of a model-specific tokenizer.
+- This project uses the standard .editorconfig from RehanSaeed  (github.com/RehanSaeed/EditorConfig). Respect its style rules when generating new code (naming conventions, using directive organization, 
+modern C# syntax preferences). If `dotnet build` shows style warnings, fix them before considering the task complete. Show me the diff before saving.
 
 ## Technical decisions
 
