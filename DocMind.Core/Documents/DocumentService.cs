@@ -31,7 +31,7 @@ public class DocumentService(
         var text = ExtractText(pdfStream);
         if (string.IsNullOrWhiteSpace(text))
         {
-            throw new InvalidOperationException(
+            throw new NoExtractableTextException(
                 $"No extractable text found in '{fileName}'. The PDF may be empty or a scanned document without OCR.");
         }
 
