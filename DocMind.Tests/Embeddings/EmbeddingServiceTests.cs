@@ -16,7 +16,7 @@ public class EmbeddingServiceTests
         // happens before any call reaches Ollama.
         var service = new EmbeddingService(new UnreachableEmbeddingGenerator());
 
-        await Assert.ThrowsAsync<ArgumentException>(() => service.GenerateEmbeddingAsync(text!));
+        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.GenerateEmbeddingAsync(text!));
     }
 
     [Fact]

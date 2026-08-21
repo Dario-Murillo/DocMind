@@ -15,7 +15,7 @@ public class CompletionServiceTests
     {
         var service = new CompletionService(new UnreachableChatClient());
 
-        await Assert.ThrowsAsync<ArgumentException>(() => service.GenerateAnswerAsync(question!, []));
+        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.GenerateAnswerAsync(question!, []));
     }
 
     [Fact]
@@ -23,7 +23,7 @@ public class CompletionServiceTests
     {
         var service = new CompletionService(new UnreachableChatClient());
 
-        await Assert.ThrowsAsync<ArgumentException>(() => service.GenerateAnswerAsync("What is DocMind?", null!));
+        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.GenerateAnswerAsync("What is DocMind?", null!));
     }
 
     [Fact]

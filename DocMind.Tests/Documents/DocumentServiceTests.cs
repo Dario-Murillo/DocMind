@@ -14,7 +14,7 @@ public class DocumentServiceTests
     {
         var service = CreateService(out _, out _, out _);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => service.IndexDocumentAsync(null!, "file.pdf"));
+        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.IndexDocumentAsync(null!, "file.pdf"));
     }
 
     [Theory]
@@ -26,16 +26,16 @@ public class DocumentServiceTests
         var service = CreateService(out _, out _, out _);
         using var stream = new MemoryStream([1, 2, 3]);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => service.IndexDocumentAsync(stream, fileName!));
+        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.IndexDocumentAsync(stream, fileName!));
     }
 
     [Fact]
-    public async Task IndexDocumentAsyncPdfWithoutExtractableTextThrowsInvalidOperationException()
+    public async Task IndexDocumentAsyncPdfWithoutExtractableTextThrowsNoExtractableTextException()
     {
         var service = CreateService(out _, out _, out _);
         using var stream = new MemoryStream(BuildMinimalPdf(content: string.Empty));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.IndexDocumentAsync(stream, "empty.pdf"));
+        _ = await Assert.ThrowsAsync<NoExtractableTextException>(() => service.IndexDocumentAsync(stream, "empty.pdf"));
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public class DocumentServiceTests
     {
         var service = CreateService(out _, out _, out _);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => service.IndexPlainTextAsync(text!, "doc.txt"));
+        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.IndexPlainTextAsync(text!, "doc.txt"));
     }
 
     [Theory]
@@ -86,7 +86,7 @@ public class DocumentServiceTests
     {
         var service = CreateService(out _, out _, out _);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => service.IndexPlainTextAsync("some text", documentName!));
+        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.IndexPlainTextAsync("some text", documentName!));
     }
 
     [Fact]
