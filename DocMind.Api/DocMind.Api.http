@@ -1,6 +1,26 @@
 @DocMind.Api_HostAddress = http://localhost:5276
 
-GET {{DocMind.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+### Upload and index a PDF document.
+# Replace the path below with a real .pdf file on your machine before running this request.
+POST {{DocMind.Api_HostAddress}}/documents/upload
+Content-Type: multipart/form-data; boundary=----DocMindBoundary
+
+------DocMindBoundary
+Content-Disposition: form-data; name="file"; filename="document.pdf"
+Content-Type: application/pdf
+
+< C:\path\to\your\document.pdf
+------DocMindBoundary--
+
+###
+
+### Ask a question over the indexed documents.
+POST {{DocMind.Api_HostAddress}}/query
+Content-Type: application/json
+
+{
+  "question": "example question",
+  "topK": 5
+}
 
 ###
