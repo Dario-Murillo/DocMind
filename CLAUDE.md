@@ -4,13 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-DocMind is a RAG (Retrieval-Augmented Generation) document Q&A system built on .NET 9. It is a solution of three projects:
+DocMind is a RAG (Retrieval-Augmented Generation) document Q&A system built on .NET 9, with an Angular frontend. It is a solution of three .NET projects plus a standalone Angular app:
 
 - **DocMind.Api** — ASP.NET Core Minimal API (entry point, HTTP endpoints). Targets `Microsoft.NET.Sdk.Web`.
 - **DocMind.Core** — business logic (document ingestion, chunking, embeddings, retrieval, RAG pipeline). Targets `Microsoft.NET.Sdk`, referenced by both Api and Tests.
 - **DocMind.Tests** — xUnit test project, references DocMind.Core.
+- **DocMind.UI** — Angular 22 single-page app (upload a document, ask a question). Calls DocMind.Api directly from the browser; not part of the `.sln`/`dotnet` build.
 
-The project is currently a bare scaffold (default template files, no domain code yet). The intended stack, not yet wired up:
+The stack:
 
 - **Semantic Kernel** for generating embeddings and chat completion, both via Ollama (local, no paid external dependencies — the project is 100% self-hosted):
   - **Embeddings**: Ollama local, model `nomic-embed-text`. Implemented via OllamaSharp + Microsoft.Extensions.AI (`IEmbeddingGenerator<string, Embedding<float>>`), not Semantic Kernel directly. The `Microsoft.SemanticKernel.Connectors.Ollama` package deprecated its classic interface (`ITextEmbeddingGenerationService`) in favor of this shared abstraction, so the same underlying type (`OllamaApiClient`) is used without the Kernel/IServiceCollection layer.
@@ -50,6 +51,24 @@ dotnet test --filter "FullyQualifiedName~DocMind.Tests.ClassName.MethodName"
 dotnet test --filter "DisplayName~SomeMethod"
 ```
 
+Run from `DocMind.UI/` (the Angular app, separate from the `.sln`):
+
+```bash
+# Install dependencies
+npm install
+
+# Run the dev server (http://localhost:4200, calls DocMind.Api on http://localhost:5276)
+npm start
+
+# Production build
+npm run build
+
+# Run tests (Vitest)
+npm test
+```
+
+The API must be running (`dotnet run --project DocMind.Api`) for the UI to work — CORS is only opened for `http://localhost:4200` when DocMind.Api runs in the Development environment.
+
 ## C# conventions
 
 - Target framework: `net9.0`, with `<Nullable>enable</Nullable>` and `<ImplicitUsings>enable</ImplicitUsings>` across all projects — write nullable-aware code and rely on implicit global usings rather than re-adding common `using` directives.
@@ -58,6 +77,17 @@ dotnet test --filter "DisplayName~SomeMethod"
 - The chunking tokenizer uses the `cl100k_base` encoding as a reference standard, even though the real models (`nomic-embed-text` and `llama3.1` via Ollama) have their own internal tokenizer — this is a deliberate simplification to keep chunk sizing consistent without adding the extra complexity of a model-specific tokenizer.
 - This project uses the standard .editorconfig from RehanSaeed  (github.com/RehanSaeed/EditorConfig). Respect its style rules when generating new code (naming conventions, using directive organization, 
 modern C# syntax preferences). If `dotnet build` shows style warnings, fix them before considering the task complete. Show me the diff before saving.
+
+## Angular conventions (DocMind.UI)
+
+- Angular 22, standalone components only — no `NgModule`s.
+- State is held in signals (`signal()`), not RxJS subjects/`BehaviorSubject`, for component-local UI state.
+- Dependency injection uses the `inject()` function, not constructor injection.
+- Templates use the new control-flow syntax (`@if`, `@for`), not `*ngIf`/`*ngFor`.
+- Feature code lives under `src/app/features/<feature>/`; shared/cross-feature code (the `Api` HTTP client, DTOs) lives under `src/app/core/`.
+- Tests run on Vitest (the Angular CLI default), not Karma/Jasmine.
+- `package.json`'s `"name"` and the `angular.json` project key stay `docmind-ui` (lowercase) even though the folder is `DocMind.UI` — npm requires package names to be lowercase.
+- The repo root `.editorconfig` and `.gitignore` cover DocMind.UI too; it does not have its own.
 
 ## Technical decisions
 
@@ -68,3 +98,4 @@ modern C# syntax preferences). If `dotnet build` shows style warnings, fix them 
 - Ollama installed and running (verify with: `ollama list`).
 - Models pulled: `nomic-embed-text` and `llama3.1`.
 - No API keys or external provider environment variables needed.
+- Node.js/npm (for DocMind.UI) — developed against Node 24 / npm 11, matching Angular CLI 22's requirements.
