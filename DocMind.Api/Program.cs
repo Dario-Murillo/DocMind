@@ -8,11 +8,20 @@ using DocMind.Core.Query;
 using DocMind.Core.VectorStore;
 using Scalar.AspNetCore;
 
+const string angularDevCorsPolicy = "AngularDev";
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+// Lets the Angular dev server (ng serve, default port 4200) call this API directly during
+// local development. Only registered in Development further down — see IsDevelopment() below.
+builder.Services.AddCors(options => options.AddPolicy(angularDevCorsPolicy, policy =>
+        policy.WithOrigins("http://localhost:4200")
+            .AllowAnyHeader()
+            .AllowAnyMethod()));
 
 // All of DocumentService's and QueryService's own dependencies are singletons (the chunking
 // tokenizer, the Ollama-backed embedding/completion clients, and the shared in-memory vector
@@ -34,6 +43,7 @@ if (app.Environment.IsDevelopment())
 {
     _ = app.MapOpenApi();
     _ = app.MapScalarApiReference();
+    _ = app.UseCors(angularDevCorsPolicy);
 }
 
 _ = app.UseHttpsRedirection();
