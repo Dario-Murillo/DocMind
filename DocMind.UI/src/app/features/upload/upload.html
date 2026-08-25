@@ -1,0 +1,21 @@
+<section class="card">
+  <h2>Upload a document</h2>
+  <p class="hint">PDF files only. The document is chunked, embedded and stored so /query can find it later.</p>
+
+  <input type="file" accept="application/pdf" (change)="onFileSelected($event)" />
+
+  <button type="button" (click)="upload()" [disabled]="!selectedFile() || status() === 'uploading'">
+    @if (status() === 'uploading') {
+      Uploading…
+    } @else {
+      Upload
+    }
+  </button>
+
+  @if (status() === 'success') {
+    <p class="message success">{{ message() }}</p>
+  }
+  @if (status() === 'error') {
+    <p class="message error">{{ message() }}</p>
+  }
+</section>

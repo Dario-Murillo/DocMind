@@ -1,0 +1,10 @@
+header {
+  max-width: 640px;
+  margin: 2rem auto 0;
+  padding: 0 1.5rem;
+  text-align: center;
+}
+
+header h1 {
+  margin-bottom: 0.25rem;
+}

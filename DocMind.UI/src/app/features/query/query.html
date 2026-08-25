@@ -1,0 +1,50 @@
+<section class="card">
+  <h2>Ask a question</h2>
+  <p class="hint">Answers are generated only from the context retrieved from uploaded documents.</p>
+
+  <label>
+    Question
+    <input type="text" [value]="question()" (input)="onQuestionInput($event)" placeholder="What is DocMind?" />
+  </label>
+
+  <label class="topk">
+    Top K
+    <input type="number" min="1" [value]="topK()" (input)="onTopKInput($event)" />
+  </label>
+
+  <button type="button" (click)="ask()" [disabled]="!question().trim() || status() === 'loading'">
+    @if (status() === 'loading') {
+      Asking…
+    } @else {
+      Ask
+    }
+  </button>
+
+  @if (status() === 'error') {
+    <p class="message error">{{ errorMessage() }}</p>
+  }
+
+  @if (status() === 'success') {
+    <div class="answer">
+      <h3>Answer</h3>
+      <p>{{ answer() }}</p>
+    </div>
+
+    @if (sources().length > 0) {
+      <div class="sources">
+        <h3>Sources</h3>
+        <ul>
+          @for (source of sources(); track source.documentId + source.sequenceNumber) {
+            <li>
+              <span class="score">{{ source.score | number: '1.2-2' }}</span>
+              <span class="doc">{{ source.documentId }} #{{ source.sequenceNumber }}</span>
+              <p class="excerpt">{{ source.excerpt }}</p>
+            </li>
+          }
+        </ul>
+      </div>
+    } @else {
+      <p class="hint">No documents were indexed yet, so no sources were used.</p>
+    }
+  }
+</section>

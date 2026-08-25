@@ -414,6 +414,7 @@ FodyWeavers.xsd
 !.vscode/launch.json
 !.vscode/extensions.json
 !.vscode/*.code-snippets
+!.vscode/mcp.json
 
 # Local History for Visual Studio Code
 .history/
@@ -427,3 +428,26 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Angular (DocMind.UI)
+dist/
+out-tsc/
+bazel-out/
+**/.angular/cache/
+connect.lock
+coverage/
+typings/
+__screenshots__/
+
+# IDEs and editors
+.idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# System files
+.DS_Store
+Thumbs.db
