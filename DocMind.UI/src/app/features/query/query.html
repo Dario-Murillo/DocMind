@@ -1,50 +1,57 @@
-<section class="card">
+<section class="card chat-card">
   <h2>Ask a question</h2>
   <p class="hint">Answers are generated only from the context retrieved from uploaded documents.</p>
 
-  <label>
-    Question
-    <input type="text" [value]="question()" (input)="onQuestionInput($event)" placeholder="What is DocMind?" />
-  </label>
-
-  <label class="topk">
-    Top K
-    <input type="number" min="1" [value]="topK()" (input)="onTopKInput($event)" />
-  </label>
-
-  <button type="button" (click)="ask()" [disabled]="!question().trim() || status() === 'loading'">
-    @if (status() === 'loading') {
-      Asking…
-    } @else {
-      Ask
+  <div class="chat-messages">
+    @if (messages().length === 0) {
+      <p class="hint">Ask a question about your uploaded documents to get started.</p>
     }
-  </button>
 
-  @if (status() === 'error') {
-    <p class="message error">{{ errorMessage() }}</p>
-  }
+    @for (message of messages(); track $index) {
+      <div class="chat-message" [class.chat-message-user]="message.role === 'user'">
+        <div class="chat-bubble" [class.chat-bubble-error]="message.error">
+          <p>{{ message.text }}</p>
 
-  @if (status() === 'success') {
-    <div class="answer">
-      <h3>Answer</h3>
-      <p>{{ answer() }}</p>
-    </div>
-
-    @if (sources().length > 0) {
-      <div class="sources">
-        <h3>Sources</h3>
-        <ul>
-          @for (source of sources(); track source.documentId + source.sequenceNumber) {
-            <li>
-              <span class="score">{{ source.score | number: '1.2-2' }}</span>
-              <span class="doc">{{ source.documentId }} #{{ source.sequenceNumber }}</span>
-              <p class="excerpt">{{ source.excerpt }}</p>
-            </li>
+          @if (message.sources && message.sources.length > 0) {
+            <div class="sources">
+              <h3>Sources</h3>
+              <ul>
+                @for (source of message.sources; track source.documentId + source.sequenceNumber) {
+                  <li>
+                    <span class="score">{{ source.score | number: '1.2-2' }}</span>
+                    <span class="doc">{{ source.documentId }} #{{ source.sequenceNumber }}</span>
+                    <p class="excerpt">{{ source.excerpt }}</p>
+                  </li>
+                }
+              </ul>
+            </div>
           }
-        </ul>
+        </div>
       </div>
-    } @else {
-      <p class="hint">No documents were indexed yet, so no sources were used.</p>
     }
-  }
+
+    @if (status() === 'loading') {
+      <div class="chat-message">
+        <div class="chat-bubble">
+          <mat-spinner diameter="20" />
+        </div>
+      </div>
+    }
+  </div>
+
+  <form class="chat-input-row" (submit)="onSubmit($event)">
+    <mat-form-field class="topk-field" appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Top K</mat-label>
+      <input matInput type="number" min="1" [value]="topK()" (input)="onTopKInput($event)" />
+    </mat-form-field>
+
+    <mat-form-field class="question-field" appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Question</mat-label>
+      <input matInput type="text" [value]="question()" (input)="onQuestionInput($event)" placeholder="What is DocMind?" />
+    </mat-form-field>
+
+    <button matIconButton type="submit" [disabled]="!question().trim() || status() === 'loading'" aria-label="Send question">
+      <mat-icon>send</mat-icon>
+    </button>
+  </form>
 </section>
