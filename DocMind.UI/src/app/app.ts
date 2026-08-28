@@ -1,9 +1,10 @@
 import { Component, signal } from '@angular/core';
+import { MatSidenavModule } from '@angular/material/sidenav';
 import { Upload } from './features/upload/upload';
 import { Query } from './features/query/query';
 
 @Component({
-  imports: [Upload, Query],
+  imports: [MatSidenavModule, Upload, Query],
   selector: 'app-root',
   styleUrl: './app.css',
   templateUrl: './app.html',
