@@ -6,7 +6,8 @@
   margin: 1.5rem auto;
   padding: 1.5rem;
   border-radius: 12px;
-  background: #fff;
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
@@ -42,22 +43,6 @@
 
 .card label.topk {
   max-width: 120px;
-}
-
-.card button {
-  margin-top: 1rem;
-  padding: 0.6rem 1.2rem;
-  font-size: 1rem;
-  color: #fff;
-  background: #2b5fd9;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.card button:disabled {
-  background: #9fb2df;
-  cursor: not-allowed;
 }
 
 .message {
