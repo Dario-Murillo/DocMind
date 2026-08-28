@@ -1,0 +1,33 @@
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  padding: 1.5rem;
+  border: 2px dashed #ccc;
+  border-radius: 8px;
+  color: #666;
+  font-size: 0.9rem;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.dropzone:hover,
+.dropzone-active {
+  border-color: #2b5fd9;
+  background-color: #f0f4ff;
+}
+
+.upload-button {
+  margin-top: 0.5rem;
+}
+
+.upload-card {
+  height: 95%;
+  margin: 0;
+  box-sizing: border-box;
+}
