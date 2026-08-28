@@ -30,6 +30,22 @@ export interface ErrorResponse {
   message: string;
 }
 
+export type QueryStatus = 'idle' | 'loading';
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  text: string;
+  sources?: SourceResult[];
+  error?: boolean;
+}
+
+export type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
+
+export interface IndexedDocument {
+  documentId: string;
+  fileName: string;
+}
+
 @Service()
 export class Api {
   private readonly http = inject(HttpClient);
