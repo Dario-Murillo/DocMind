@@ -5,14 +5,13 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using DocMind.Api.Contracts;
-using Microsoft.AspNetCore.Mvc.Testing;
 
-public class UploadEndpointTests
+[Collection(ApiCollectionDefinition.Name)]
+public class UploadEndpointTests(DocMindApiFactory factory)
 {
     [Fact]
     public async Task UploadDocumentNoFileReturnsBadRequest()
     {
-        using var factory = new WebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsync("/documents/upload", content: null);
@@ -25,7 +24,6 @@ public class UploadEndpointTests
     [Fact]
     public async Task UploadDocumentNonPdfFileReturnsBadRequest()
     {
-        using var factory = new WebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         using var form = new MultipartFormDataContent();

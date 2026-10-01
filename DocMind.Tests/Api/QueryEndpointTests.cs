@@ -3,14 +3,13 @@ namespace DocMind.Tests.Api;
 using System.Net;
 using System.Net.Http.Json;
 using DocMind.Api.Contracts;
-using Microsoft.AspNetCore.Mvc.Testing;
 
-public class QueryEndpointTests
+[Collection(ApiCollectionDefinition.Name)]
+public class QueryEndpointTests(DocMindApiFactory factory)
 {
     [Fact]
     public async Task QueryEmptyQuestionReturnsBadRequest()
     {
-        using var factory = new WebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/query", new QueryRequest(string.Empty, null));
@@ -27,7 +26,6 @@ public class QueryEndpointTests
         // Requires a local Ollama instance running with nomic-embed-text and llama3.1 pulled:
         // an empty vector store doesn't skip the embedding/completion calls, it just means
         // CompletionService gets no context chunks and answers accordingly.
-        using var factory = new WebApplicationFactory<Program>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/query", new QueryRequest("What is DocMind?", null));

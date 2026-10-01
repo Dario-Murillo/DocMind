@@ -18,6 +18,7 @@ The stack:
   - **Completion/Chat**: Ollama local, model `llama3.1`.
   - Both served at `http://localhost:11434`.
 - **PdfPig** for extracting text from PDF documents.
+- **PostgreSQL 17 + pgvector** for persistence, accessed through EF Core 9 (`Npgsql.EntityFrameworkCore.PostgreSQL`, `Pgvector.EntityFrameworkCore`). `DocMindDbContext` and its migrations live in `DocMind.Core/Data/`. The schema currently only enables the `vector` extension; documents and vectors are still held in memory.
 
 NuGet packages: `Microsoft.SemanticKernel.Connectors.Ollama` (no `Connectors.OpenAI`).
 
@@ -28,6 +29,12 @@ As this scaffold is built out, prefer putting orchestration/business logic (chun
 Run from the repository root (where `DocMind.sln` lives).
 
 ```bash
+# Start PostgreSQL + pgvector (host port 5433)
+docker compose up -d
+
+# Restore local tools (dotnet-ef)
+dotnet tool restore
+
 # Restore
 dotnet restore
 
@@ -49,6 +56,9 @@ dotnet test --filter "FullyQualifiedName~DocMind.Tests.ClassName.MethodName"
 
 # Run tests matching a name substring
 dotnet test --filter "DisplayName~SomeMethod"
+
+# Add a migration after changing DocMindDbContext
+dotnet ef migrations add <Name> --project DocMind.Core --startup-project DocMind.Api --output-dir Data/Migrations
 ```
 
 Run from `DocMind.UI/` (the Angular app, separate from the `.sln`):
@@ -92,10 +102,15 @@ modern C# syntax preferences). If `dotnet build` shows style warnings, fix them 
 ## Technical decisions
 
 - **Embeddings: OllamaSharp + Microsoft.Extensions.AI instead of Semantic Kernel directly.** The `Microsoft.SemanticKernel.Connectors.Ollama` package (prerelease) marks its dedicated class `OllamaTextEmbeddingGenerationService` and the `AddOllamaTextEmbeddingGeneration` extension method as `[Obsolete]`, pointing to `AddOllamaEmbeddingGenerator` / `OllamaApiClient.AsEmbeddingGenerationService()` instead. That "recommended" path only makes sense if a full `IKernelBuilder` or `IServiceCollection` is registered, and under the hood it ends up resolving the same `OllamaApiClient` from OllamaSharp as the implementation of `IEmbeddingGenerator<string, Embedding<float>>` (the `Microsoft.Extensions.AI` abstraction that Semantic Kernel migrated embedding generation to). That's why `EmbeddingService` instantiates `OllamaApiClient` directly: identical runtime behavior (same HTTP client, same endpoint, same model), without the overhead of spinning up a `Kernel` just to get back the same object. The `Microsoft.SemanticKernel.Connectors.Ollama` package is still referenced in `DocMind.Core.csproj` (it pulls in `OllamaSharp` and `Microsoft.Extensions.AI.Abstractions` as transitive dependencies), but the code doesn't go through its public Kernel/DI surface.
+- **Database on host port 5433, not 5432.** The development machine runs a native PostgreSQL service on 5432, so `docker-compose.yml` maps the container to `127.0.0.1:5433`. The connection string in `appsettings.Development.json` matches.
+- **Migrations run on startup only in Development.** `Program.cs` calls `Database.MigrateAsync()` inside the `IsDevelopment()` block. In any other environment migrations must be applied as an explicit deployment step, and the connection string must come from the `ConnectionStrings__DocMind` environment variable.
+- **EF Core packages are pinned to the 9.x line.** EF Core 10 requires `net10.0`. `Microsoft.EntityFrameworkCore.Relational` is referenced explicitly in DocMind.Core so that Api, Core and Tests resolve the same EF Core version as the `dotnet-ef` tool.
+- **API tests use Testcontainers.** `DocMindApiFactory` starts a `pgvector/pgvector:pg17` container and overrides the connection string; the test classes share it through the `Api` xUnit collection. `dotnet test` therefore needs Docker running.
 
 ## Local requirements
 
 - Ollama installed and running (verify with: `ollama list`).
 - Models pulled: `nomic-embed-text` and `llama3.1`.
 - No API keys or external provider environment variables needed.
+- Docker running, for the PostgreSQL container and for the API tests.
 - Node.js/npm (for DocMind.UI) — developed against Node 24 / npm 11, matching Angular CLI 22's requirements.

@@ -2,10 +2,12 @@ using DocMind.Api;
 using DocMind.Api.Contracts;
 using DocMind.Core.Chunking;
 using DocMind.Core.Completion;
+using DocMind.Core.Data;
 using DocMind.Core.Documents;
 using DocMind.Core.Embeddings;
 using DocMind.Core.Query;
 using DocMind.Core.VectorStore;
+using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
 const string angularDevCorsPolicy = "AngularDev";
@@ -34,6 +36,11 @@ builder.Services.AddSingleton<IDocumentService, DocumentService>();
 builder.Services.AddSingleton<ICompletionService, CompletionService>();
 builder.Services.AddSingleton<IQueryService, QueryService>();
 
+var connectionString = builder.Configuration.GetConnectionString("DocMind") ??
+    throw new InvalidOperationException("Connection string 'DocMind' is not configured");
+
+builder.Services.AddDocMindData(connectionString);
+
 var app = builder.Build();
 
 _ = app.UseApiExceptionHandling();
@@ -44,6 +51,12 @@ if (app.Environment.IsDevelopment())
     _ = app.MapOpenApi();
     _ = app.MapScalarApiReference();
     _ = app.UseCors(angularDevCorsPolicy);
+
+    // Brings the local database up to date on startup so `docker compose up -d` plus
+    // `dotnet run` is all a developer needs. Outside Development, migrations are applied
+    // as an explicit deployment step instead.
+    await using var scope = app.Services.CreateAsyncScope();
+    await scope.ServiceProvider.GetRequiredService<DocMindDbContext>().Database.MigrateAsync();
 }
 
 _ = app.UseHttpsRedirection();
