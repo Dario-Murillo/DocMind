@@ -12,7 +12,7 @@ public class UploadEndpointTests(DocMindApiFactory factory)
     [Fact]
     public async Task UploadDocumentNoFileReturnsBadRequest()
     {
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAuthenticatedClientAsync();
 
         var response = await client.PostAsync("/documents/upload", content: null);
 
@@ -24,7 +24,7 @@ public class UploadEndpointTests(DocMindApiFactory factory)
     [Fact]
     public async Task UploadDocumentNonPdfFileReturnsBadRequest()
     {
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAuthenticatedClientAsync();
 
         using var form = new MultipartFormDataContent();
         using var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes("just some plain text, not a PDF"));
