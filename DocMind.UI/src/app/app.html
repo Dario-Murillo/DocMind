@@ -1,15 +1,15 @@
 <header>
   <h1>{{ title() }}</h1>
   <p class="hint">Local, self-hosted RAG document Q&amp;A.</p>
+
+  @if (auth.currentUser(); as user) {
+    <div class="session">
+      <span>{{ user.email }}</span>
+      <button matButton type="button" (click)="logout()">Log out</button>
+    </div>
+  }
 </header>
 
 <main>
-  <mat-drawer-container class="app-sidenav-container">
-    <mat-drawer class="app-sidebar" mode="side" opened>
-        <app-upload />
-    </mat-drawer>
-    <mat-drawer-content>
-      <app-query />
-    </mat-drawer-content>
-  </mat-drawer-container>
+  <router-outlet />
 </main>

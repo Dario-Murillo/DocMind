@@ -8,7 +8,14 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Api, ErrorResponse, QueryStatus, ChatMessage } from '../../core/api';
 @Component({
-  imports: [DecimalPipe, MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule],
+  imports: [
+    DecimalPipe,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatIconModule,
+    MatInputModule,
+    MatProgressSpinnerModule,
+  ],
   selector: 'app-query',
   styleUrl: './query.css',
   templateUrl: './query.html',

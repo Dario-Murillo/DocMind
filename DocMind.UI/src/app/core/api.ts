@@ -46,6 +46,22 @@ export interface IndexedDocument {
   fileName: string;
 }
 
+export interface AuthRequest {
+  email: string;
+  password: string;
+}
+
+export interface UserInfo {
+  email: string;
+  isEmailConfirmed: boolean;
+}
+
+// Shape of Identity's 400 responses on /auth/register (e.g. weak password, duplicate email).
+export interface ValidationProblem {
+  title?: string;
+  errors?: Record<string, string[]>;
+}
+
 @Service()
 export class Api {
   private readonly http = inject(HttpClient);
@@ -59,5 +75,23 @@ export class Api {
 
   query(request: QueryRequest): Observable<QueryResponse> {
     return this.http.post<QueryResponse>(`${this.baseUrl}/query`, request);
+  }
+
+  register(request: AuthRequest): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/auth/register`, request);
+  }
+
+  login(request: AuthRequest): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/auth/login`, request, {
+      params: { useCookies: true },
+    });
+  }
+
+  logout(): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/auth/logout`, null);
+  }
+
+  getUserInfo(): Observable<UserInfo> {
+    return this.http.get<UserInfo>(`${this.baseUrl}/auth/manage/info`);
   }
 }
