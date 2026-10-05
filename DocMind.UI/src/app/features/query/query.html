@@ -47,10 +47,21 @@
 
     <mat-form-field class="question-field" appearance="outline" subscriptSizing="dynamic">
       <mat-label>Question</mat-label>
-      <input matInput type="text" [value]="question()" (input)="onQuestionInput($event)" placeholder="What is DocMind?" />
+      <input
+        matInput
+        type="text"
+        [value]="question()"
+        (input)="onQuestionInput($event)"
+        placeholder="What is DocMind?"
+      />
     </mat-form-field>
 
-    <button matIconButton type="submit" [disabled]="!question().trim() || status() === 'loading'" aria-label="Send question">
+    <button
+      matIconButton
+      type="submit"
+      [disabled]="!question().trim() || status() === 'loading'"
+      aria-label="Send question"
+    >
       <mat-icon>send</mat-icon>
     </button>
   </form>
