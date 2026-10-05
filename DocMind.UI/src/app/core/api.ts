@@ -83,7 +83,7 @@ export class Api {
 
   login(request: AuthRequest): Observable<void> {
     return this.http.post<void>(`${this.baseUrl}/auth/login`, request, {
-      params: {useCookies: true},
+      params: { useCookies: true },
     });
   }
 
