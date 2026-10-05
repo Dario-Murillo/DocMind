@@ -3,7 +3,7 @@
 A local, self-hosted RAG (Retrieval-Augmented Generation) document Q&A system. Upload a PDF, then ask questions about it — answered using only the content you indexed, no external/paid APIs involved.
 
 - **DocMind.Api** / **DocMind.Core** — .NET 9 backend (ASP.NET Core Minimal API + business logic). Chunks and embeds documents, retrieves relevant passages, and generates answers via a local [Ollama](https://ollama.com) instance (`nomic-embed-text` for embeddings, `llama3.1` for chat).
-- **DocMind.UI** — Angular 22 frontend for uploading documents and asking questions.
+- **DocMind.UI** — Angular 22 frontend for signing in, uploading documents and asking questions.
 - **DocMind.Tests** — xUnit test suite for the backend.
 
 ## Prerequisites
@@ -41,7 +41,7 @@ npm install
 npm start
 ```
 
-The UI is served at `http://localhost:4200` and talks to the API above.
+The UI is served at `http://localhost:4200` and talks to the API above. Create an account on first use; uploading and asking questions require signing in. Open it as `localhost`, not `127.0.0.1`, or the session cookie won't reach the API.
 
 ## Running tests
 

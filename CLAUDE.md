@@ -9,7 +9,7 @@ DocMind is a RAG (Retrieval-Augmented Generation) document Q&A system built on .
 - **DocMind.Api** — ASP.NET Core Minimal API (entry point, HTTP endpoints). Targets `Microsoft.NET.Sdk.Web`.
 - **DocMind.Core** — business logic (document ingestion, chunking, embeddings, retrieval, RAG pipeline). Targets `Microsoft.NET.Sdk`, referenced by both Api and Tests.
 - **DocMind.Tests** — xUnit test project, references DocMind.Core.
-- **DocMind.UI** — Angular 22 single-page app (upload a document, ask a question). Calls DocMind.Api directly from the browser; not part of the `.sln`/`dotnet` build.
+- **DocMind.UI** — Angular 22 single-page app (sign in, upload a document, ask a question). Calls DocMind.Api directly from the browser; not part of the `.sln`/`dotnet` build.
 
 The stack:
 
@@ -18,7 +18,8 @@ The stack:
   - **Completion/Chat**: Ollama local, model `llama3.1`.
   - Both served at `http://localhost:11434`.
 - **PdfPig** for extracting text from PDF documents.
-- **PostgreSQL 17 + pgvector** for persistence, accessed through EF Core 9 (`Npgsql.EntityFrameworkCore.PostgreSQL`, `Pgvector.EntityFrameworkCore`). `DocMindDbContext` and its migrations live in `DocMind.Core/Data/`. The schema currently only enables the `vector` extension; documents and vectors are still held in memory.
+- **PostgreSQL 17 + pgvector** for persistence, accessed through EF Core 9 (`Npgsql.EntityFrameworkCore.PostgreSQL`, `Pgvector.EntityFrameworkCore`). `DocMindDbContext` and its migrations live in `DocMind.Core/Data/`. The schema currently holds the ASP.NET Core Identity user tables and enables the `vector` extension; documents and vectors are still held in memory and shared by all users.
+- **ASP.NET Core Identity** for user accounts (`ApplicationUser` in `DocMind.Core/Users/`), exposed through `MapIdentityApi` under `/auth` with cookie-based sessions.
 
 NuGet packages: `Microsoft.SemanticKernel.Connectors.Ollama` (no `Connectors.OpenAI`).
 
@@ -78,6 +79,7 @@ npm test
 ```
 
 The API must be running (`dotnet run --project DocMind.Api`) for the UI to work — CORS is only opened for `http://localhost:4200` when DocMind.Api runs in the Development environment.
+Open the UI as `http://localhost:4200`, not `127.0.0.1`: the session cookie only travels because the UI and the API are both on `localhost`.
 
 ## C# conventions
 
@@ -87,6 +89,7 @@ The API must be running (`dotnet run --project DocMind.Api`) for the UI to work 
 - The chunking tokenizer uses the `cl100k_base` encoding as a reference standard, even though the real models (`nomic-embed-text` and `llama3.1` via Ollama) have their own internal tokenizer — this is a deliberate simplification to keep chunk sizing consistent without adding the extra complexity of a model-specific tokenizer.
 - This project uses the standard .editorconfig from RehanSaeed  (github.com/RehanSaeed/EditorConfig). Respect its style rules when generating new code (naming conventions, using directive organization, 
 modern C# syntax preferences). If `dotnet build` shows style warnings, fix them before considering the task complete. Show me the diff before saving.
+- Endpoints that need a signed-in user call `.RequireAuthorization()`. Core services that act on a user's data take the user's id as an explicit `Guid userId` parameter, read from the endpoint's `ClaimsPrincipal` — never through `IHttpContextAccessor` or an ambient "current user" service.
 
 ## Angular conventions (DocMind.UI)
 
@@ -98,6 +101,8 @@ modern C# syntax preferences). If `dotnet build` shows style warnings, fix them 
 - Tests run on Vitest (the Angular CLI default), not Karma/Jasmine.
 - `package.json`'s `"name"` and the `angular.json` project key stay `docmind-ui` (lowercase) even though the folder is `DocMind.UI` — npm requires package names to be lowercase.
 - The repo root `.editorconfig` and `.gitignore` cover DocMind.UI too; it does not have its own.
+- Routes are defined in `src/app/app.routes.ts`. The signed-in user lives in the `Auth` service (`core/auth.ts`); `authGuard` protects the workspace and `guestGuard` keeps signed-in users off `/login` and `/register`.
+- `credentialsInterceptor` (`core/credentials-interceptor.ts`) sets `withCredentials` on every request, so the session cookie reaches the API across origins, and redirects to `/login` on any 401 outside `/auth/`.
 
 ## Technical decisions
 
@@ -105,7 +110,10 @@ modern C# syntax preferences). If `dotnet build` shows style warnings, fix them 
 - **Database on host port 5433, not 5432.** The development machine runs a native PostgreSQL service on 5432, so `docker-compose.yml` maps the container to `127.0.0.1:5433`. The connection string in `appsettings.Development.json` matches.
 - **Migrations run on startup only in Development.** `Program.cs` calls `Database.MigrateAsync()` inside the `IsDevelopment()` block. In any other environment migrations must be applied as an explicit deployment step, and the connection string must come from the `ConnectionStrings__DocMind` environment variable.
 - **EF Core packages are pinned to the 9.x line.** EF Core 10 requires `net10.0`. `Microsoft.EntityFrameworkCore.Relational` is referenced explicitly in DocMind.Core so that Api, Core and Tests resolve the same EF Core version as the `dotnet-ef` tool.
-- **API tests use Testcontainers.** `DocMindApiFactory` starts a `pgvector/pgvector:pg17` container and overrides the connection string; the test classes share it through the `Api` xUnit collection. `dotnet test` therefore needs Docker running.
+- **Authentication: ASP.NET Core Identity with cookie sessions.** `MapIdentityApi` provides `/auth/register`, `/auth/login`, `/auth/manage/info` and the rest of Identity's endpoints; `/auth/logout` is a custom endpoint, since Identity doesn't ship one. The UI logs in with `?useCookies=true`, so the session lives in an HttpOnly, `SameSite=Lax` cookie instead of a token the UI would have to store. Without that parameter `/login` returns a bearer token and sets no cookie. Both the cookie and Identity's bearer token are opaque Data Protection payloads, not JWTs. Unauthenticated requests get a 401, not a redirect to a login page. In development the UI (port 4200) and the API (port 5276) are different origins but the same site, so the CORS policy uses `AllowCredentials()`.
+- **`IdentityUserContext<ApplicationUser, Guid>`, without roles.** Guid keys make every future `user_id` foreign key a native `uuid` column. `IdentityUserContext` skips the three role tables that `IdentityDbContext` would add; switching the base class (plus a migration) brings them back if roles are ever needed.
+- **`UseAuthentication()`/`UseAuthorization()` are called explicitly, after `UseCors`.** If left implicit, ASP.NET Core adds them at the start of the pipeline, ahead of CORS, and 401 responses go out without CORS headers — the browser then reports a network error instead of a 401.
+- **API tests use Testcontainers.** `DocMindApiFactory` starts a `pgvector/pgvector:pg17` container and overrides the connection string; the test classes share it through the `Api` xUnit collection. `dotnet test` therefore needs Docker running. Tests that call protected endpoints use `DocMindApiFactory.CreateAuthenticatedClientAsync()`, which registers a fresh user (unique email, since the database is shared) and logs in with a session cookie.
 
 ## Local requirements
 

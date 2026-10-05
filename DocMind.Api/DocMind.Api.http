@@ -1,5 +1,40 @@
 @DocMind.Api_HostAddress = http://localhost:5276
 
+### Create an account. Identity's default policy needs 6+ characters with upper and lower
+### case letters, a digit and a symbol.
+POST {{DocMind.Api_HostAddress}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "you@example.com",
+  "password": "Passw0rd!"
+}
+
+###
+
+### Log in. ?useCookies=true makes the API set a session cookie, which the REST Client
+### extension keeps and sends with the requests below; without it /login returns a bearer
+### token instead.
+POST {{DocMind.Api_HostAddress}}/auth/login?useCookies=true
+Content-Type: application/json
+
+{
+  "email": "you@example.com",
+  "password": "Passw0rd!"
+}
+
+###
+
+### Show the signed-in user.
+GET {{DocMind.Api_HostAddress}}/auth/manage/info
+
+###
+
+### Log out (expires the session cookie).
+POST {{DocMind.Api_HostAddress}}/auth/logout
+
+###
+
 ### Upload and index a PDF document.
 # Replace the path below with a real .pdf file on your machine before running this request.
 POST {{DocMind.Api_HostAddress}}/documents/upload
