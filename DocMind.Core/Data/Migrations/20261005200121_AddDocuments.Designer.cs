@@ -3,6 +3,7 @@ using System;
 using DocMind.Core.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -12,9 +13,11 @@ using Pgvector;
 namespace DocMind.Core.Data.Migrations
 {
     [DbContext(typeof(DocMindDbContext))]
-    partial class DocMindDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261005200121_AddDocuments")]
+    partial class AddDocuments
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
