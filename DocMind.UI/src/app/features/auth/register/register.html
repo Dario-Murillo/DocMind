@@ -1,0 +1,50 @@
+<section class="card auth-card">
+  <h2>Create an account</h2>
+  <p class="hint">
+    Passwords need at least 6 characters, with upper and lower case letters, a digit and a symbol.
+  </p>
+
+  <form (submit)="onSubmit($event)">
+    <mat-form-field appearance="outline">
+      <mat-label>Email</mat-label>
+      <input
+        matInput
+        type="email"
+        autocomplete="email"
+        required
+        [value]="email()"
+        (input)="onEmailInput($event)"
+      />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Password</mat-label>
+      <input
+        matInput
+        type="password"
+        autocomplete="new-password"
+        required
+        [value]="password()"
+        (input)="onPasswordInput($event)"
+      />
+    </mat-form-field>
+
+    @if (errors().length > 0) {
+      <ul class="message error">
+        @for (message of errors(); track message) {
+          <li>{{ message }}</li>
+        }
+      </ul>
+    }
+
+    <button matButton="filled" type="submit" [disabled]="submitting()">
+      @if (submitting()) {
+        <mat-spinner diameter="20" />
+      } @else {
+        Create account
+      }
+    </button>
+  </form>
+
+  <p class="hint">Already have an account? <a routerLink="/login">Log in</a></p>
+</section>

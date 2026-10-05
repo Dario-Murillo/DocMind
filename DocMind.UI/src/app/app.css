@@ -5,6 +5,7 @@
 }
 
 header {
+  position: relative;
   padding: 1rem 1.5rem;
   text-align: center;
 }
@@ -18,11 +19,11 @@ main {
   min-height: 0;
 }
 
-.app-sidenav-container {
-  height: 100%;
-}
-
-.app-sidebar {
-  width: 40%;
-  padding: 0 2rem;
+.session {
+  position: absolute;
+  top: 1rem;
+  right: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }

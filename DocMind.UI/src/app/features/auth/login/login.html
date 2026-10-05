@@ -1,0 +1,44 @@
+<section class="card auth-card">
+  <h2>Log in</h2>
+  <p class="hint">Sign in to upload documents and ask questions about them.</p>
+
+  <form (submit)="onSubmit($event)">
+    <mat-form-field appearance="outline">
+      <mat-label>Email</mat-label>
+      <input
+        matInput
+        type="email"
+        autocomplete="email"
+        required
+        [value]="email()"
+        (input)="onEmailInput($event)"
+      />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Password</mat-label>
+      <input
+        matInput
+        type="password"
+        autocomplete="current-password"
+        required
+        [value]="password()"
+        (input)="onPasswordInput($event)"
+      />
+    </mat-form-field>
+
+    @if (error(); as message) {
+      <p class="message error">{{ message }}</p>
+    }
+
+    <button matButton="filled" type="submit" [disabled]="submitting()">
+      @if (submitting()) {
+        <mat-spinner diameter="20" />
+      } @else {
+        Log in
+      }
+    </button>
+  </form>
+
+  <p class="hint">No account yet? <a routerLink="/register">Create one</a></p>
+</section>

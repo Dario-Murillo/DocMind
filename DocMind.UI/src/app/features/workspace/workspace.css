@@ -1,0 +1,13 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.app-sidenav-container {
+  height: 100%;
+}
+
+.app-sidebar {
+  width: 40%;
+  padding: 0 2rem;
+}
