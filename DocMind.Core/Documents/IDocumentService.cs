@@ -2,7 +2,7 @@ namespace DocMind.Core.Documents;
 
 public interface IDocumentService
 {
-    public Task<string> IndexDocumentAsync(Stream pdfStream, string fileName);
+    public Task<Guid> IndexDocumentAsync(Stream pdfStream, string fileName);
 
-    public Task<string> IndexPlainTextAsync(string text, string documentName);
+    public Task<Guid> IndexPlainTextAsync(string text, string documentName);
 }

@@ -78,6 +78,6 @@ public class InMemoryVectorStoreServiceTests
         _ = Assert.Throws<ArgumentException>(() => store.Search(queryVector!));
     }
 
-    private static Chunk CreateChunk(string documentId, int sequenceNumber) =>
-        new(Guid.NewGuid(), documentId, $"content for {documentId}", TokenCount: 10, sequenceNumber);
+    private static Chunk CreateChunk(string label, int sequenceNumber) =>
+        new(Guid.NewGuid(), Guid.NewGuid(), $"content for {label}", TokenCount: 10, sequenceNumber);
 }

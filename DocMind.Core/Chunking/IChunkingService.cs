@@ -2,5 +2,5 @@ namespace DocMind.Core.Chunking;
 
 public interface IChunkingService
 {
-    public List<Chunk> ChunkText(string text, string sourceDocumentId);
+    public List<Chunk> ChunkText(string text, Guid sourceDocumentId);
 }

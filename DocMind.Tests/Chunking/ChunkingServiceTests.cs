@@ -14,11 +14,12 @@ public class ChunkingServiceTests
     {
         var service = new ChunkingService();
         var text = BuildTextWithExactTokenCount(100);
+        var documentId = Guid.NewGuid();
 
-        var chunks = service.ChunkText(text, "doc-short");
+        var chunks = service.ChunkText(text, documentId);
 
         var chunk = Assert.Single(chunks);
-        Assert.Equal("doc-short", chunk.DocumentId);
+        Assert.Equal(documentId, chunk.DocumentId);
         Assert.Equal(0, chunk.SequenceNumber);
         Assert.Equal(100, chunk.TokenCount);
     }
@@ -30,7 +31,7 @@ public class ChunkingServiceTests
         var service = new ChunkingService(chunkSizeTokens: 500, overlapTokens: overlapTokens, minChunkTokens: 50);
         var text = BuildTextWithExactTokenCount(1200);
 
-        var chunks = service.ChunkText(text, "doc-long");
+        var chunks = service.ChunkText(text, Guid.NewGuid());
 
         Assert.True(chunks.Count > 1, "Expected more than one chunk for a 1200-token document.");
 
@@ -53,11 +54,12 @@ public class ChunkingServiceTests
         // merge into or fall back on, so it must still be returned as-is rather than discarded.
         var service = new ChunkingService(chunkSizeTokens: 500, overlapTokens: 75, minChunkTokens: 50);
         var text = BuildTextWithExactTokenCount(10);
+        var documentId = Guid.NewGuid();
 
-        var chunks = service.ChunkText(text, "doc-very-short");
+        var chunks = service.ChunkText(text, documentId);
 
         var chunk = Assert.Single(chunks);
-        Assert.Equal("doc-very-short", chunk.DocumentId);
+        Assert.Equal(documentId, chunk.DocumentId);
         Assert.Equal(0, chunk.SequenceNumber);
         Assert.Equal(10, chunk.TokenCount);
     }
@@ -71,7 +73,7 @@ public class ChunkingServiceTests
         var service = new ChunkingService(chunkSizeTokens: 10, overlapTokens: 3, minChunkTokens: 5);
         var text = BuildTextWithExactTokenCount(11);
 
-        var chunks = service.ChunkText(text, "doc-merge");
+        var chunks = service.ChunkText(text, Guid.NewGuid());
 
         var chunk = Assert.Single(chunks);
         Assert.Equal(0, chunk.SequenceNumber);

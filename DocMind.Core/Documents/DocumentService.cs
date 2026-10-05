@@ -16,7 +16,7 @@ public class DocumentService(
     private readonly IEmbeddingService embeddingService = embeddingService ?? throw new ArgumentNullException(nameof(embeddingService));
     private readonly IVectorStoreService vectorStoreService = vectorStoreService ?? throw new ArgumentNullException(nameof(vectorStoreService));
 
-    public async Task<string> IndexDocumentAsync(Stream pdfStream, string fileName)
+    public async Task<Guid> IndexDocumentAsync(Stream pdfStream, string fileName)
     {
         if (pdfStream is null)
         {
@@ -38,7 +38,7 @@ public class DocumentService(
         return await this.IndexTextAsync(text);
     }
 
-    public async Task<string> IndexPlainTextAsync(string text, string documentName)
+    public async Task<Guid> IndexPlainTextAsync(string text, string documentName)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -53,9 +53,9 @@ public class DocumentService(
         return await this.IndexTextAsync(text);
     }
 
-    private async Task<string> IndexTextAsync(string text)
+    private async Task<Guid> IndexTextAsync(string text)
     {
-        var documentId = Guid.NewGuid().ToString();
+        var documentId = Guid.NewGuid();
         var chunks = this.chunkingService.ChunkText(text, documentId);
 
         foreach (var chunk in chunks)

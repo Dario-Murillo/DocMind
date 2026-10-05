@@ -31,7 +31,7 @@ public class ChunkingService : IChunkingService
         this.tokenizer = TiktokenTokenizer.CreateForEncoding("cl100k_base");
     }
 
-    public List<Chunk> ChunkText(string text, string sourceDocumentId)
+    public List<Chunk> ChunkText(string text, Guid sourceDocumentId)
     {
         var ids = this.tokenizer.EncodeToIds(text);
         var totalTokens = ids.Count;

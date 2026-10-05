@@ -42,15 +42,15 @@ public class DocumentServiceTests
     public async Task IndexDocumentAsyncValidPdfCallsChunkingThenEmbedsAndStoresEachChunkInOrder()
     {
         var callLog = new List<string>();
-        var chunk1 = new Chunk(Guid.NewGuid(), "placeholder", "chunk one content", TokenCount: 3, SequenceNumber: 0);
-        var chunk2 = new Chunk(Guid.NewGuid(), "placeholder", "chunk two content", TokenCount: 3, SequenceNumber: 1);
+        var chunk1 = new Chunk(Guid.NewGuid(), Guid.Empty, "chunk one content", TokenCount: 3, SequenceNumber: 0);
+        var chunk2 = new Chunk(Guid.NewGuid(), Guid.Empty, "chunk two content", TokenCount: 3, SequenceNumber: 1);
 
         var service = CreateService(out var chunkingService, out var embeddingService, out var vectorStoreService, callLog, [chunk1, chunk2]);
         using var stream = new MemoryStream(BuildMinimalPdf("Hello World from DocMind"));
 
         var documentId = await service.IndexDocumentAsync(stream, "hello.pdf");
 
-        Assert.False(string.IsNullOrWhiteSpace(documentId));
+        Assert.NotEqual(Guid.Empty, documentId);
         Assert.Contains("Hello World from DocMind", chunkingService.ReceivedText);
         Assert.Equal(documentId, chunkingService.ReceivedDocumentId);
 
@@ -93,14 +93,14 @@ public class DocumentServiceTests
     public async Task IndexPlainTextAsyncValidTextCallsChunkingThenEmbedsAndStoresEachChunkInOrder()
     {
         var callLog = new List<string>();
-        var chunk1 = new Chunk(Guid.NewGuid(), "placeholder", "chunk one content", TokenCount: 3, SequenceNumber: 0);
-        var chunk2 = new Chunk(Guid.NewGuid(), "placeholder", "chunk two content", TokenCount: 3, SequenceNumber: 1);
+        var chunk1 = new Chunk(Guid.NewGuid(), Guid.Empty, "chunk one content", TokenCount: 3, SequenceNumber: 0);
+        var chunk2 = new Chunk(Guid.NewGuid(), Guid.Empty, "chunk two content", TokenCount: 3, SequenceNumber: 1);
 
         var service = CreateService(out var chunkingService, out var embeddingService, out var vectorStoreService, callLog, [chunk1, chunk2]);
 
         var documentId = await service.IndexPlainTextAsync("Hello World from DocMind", "hello.txt");
 
-        Assert.False(string.IsNullOrWhiteSpace(documentId));
+        Assert.NotEqual(Guid.Empty, documentId);
         Assert.Equal("Hello World from DocMind", chunkingService.ReceivedText);
         Assert.Equal(documentId, chunkingService.ReceivedDocumentId);
 
@@ -176,9 +176,9 @@ public class DocumentServiceTests
     private sealed class FakeChunkingService(List<string> callLog, List<Chunk> chunksToReturn) : IChunkingService
     {
         public string? ReceivedText { get; private set; }
-        public string? ReceivedDocumentId { get; private set; }
+        public Guid? ReceivedDocumentId { get; private set; }
 
-        public List<Chunk> ChunkText(string text, string sourceDocumentId)
+        public List<Chunk> ChunkText(string text, Guid sourceDocumentId)
         {
             this.ReceivedText = text;
             this.ReceivedDocumentId = sourceDocumentId;
