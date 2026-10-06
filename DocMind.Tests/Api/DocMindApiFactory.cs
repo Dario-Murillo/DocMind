@@ -1,9 +1,14 @@
 namespace DocMind.Tests.Api;
 
 using System.Net.Http.Json;
+using DocMind.Core.Data;
+using DocMind.Core.Users;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
 
 public sealed class DocMindApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
@@ -36,6 +41,36 @@ public sealed class DocMindApiFactory : WebApplicationFactory<Program>, IAsyncLi
         _ = login.EnsureSuccessStatusCode();
 
         return client;
+    }
+
+    // Creates a user directly through Identity, for tests that call Core services without HTTP.
+    public async Task<Guid> CreateUserAsync()
+    {
+        await using var scope = this.Services.CreateAsyncScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var email = $"{Guid.NewGuid()}@test.local";
+        var user = new ApplicationUser { UserName = email, Email = email };
+
+        var result = await userManager.CreateAsync(user, TestPassword);
+        if (!result.Succeeded)
+        {
+            throw new InvalidOperationException(string.Join(", ", result.Errors.Select(error => error.Description)));
+        }
+
+        return user.Id;
+    }
+
+    // A fresh context per call, so assertions read what is in the database rather than entities
+    // still tracked by the context that wrote them.
+    public DocMindDbContext CreateDbContext()
+    {
+        // Touching Services boots the app, which applies the migrations, so the tables exist even
+        // when this is the first thing a test does.
+        _ = this.Services;
+
+        return new(new DbContextOptionsBuilder<DocMindDbContext>()
+            .UseNpgsql(this.ConnectionString, npgsql => npgsql.UseVector())
+            .Options);
     }
 
     async Task IAsyncLifetime.DisposeAsync()

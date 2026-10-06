@@ -20,6 +20,10 @@ public static partial class ApiExceptionHandling
             {
                 await WriteError(context, StatusCodes.Status422UnprocessableEntity, ex.Message);
             }
+            catch (DuplicateDocumentException ex)
+            {
+                await WriteError(context, StatusCodes.Status409Conflict, ex.Message);
+            }
             catch (BadHttpRequestException)
             {
                 await WriteError(context, StatusCodes.Status400BadRequest, "The request could not be read. Ensure the request body is well-formed.");

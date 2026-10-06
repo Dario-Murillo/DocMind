@@ -11,12 +11,13 @@ public class EmbeddingService(IEmbeddingGenerator<string, Embedding<float>> embe
 
     private readonly IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator = embeddingGenerator ?? throw new ArgumentNullException(nameof(embeddingGenerator));
     private readonly Uri endpoint = endpoint ?? DefaultEndpoint;
-    private readonly string modelId = modelId;
 
     public EmbeddingService(Uri? endpoint = null, string modelId = DefaultModelId)
         : this(new OllamaApiClient(endpoint ?? DefaultEndpoint, modelId), endpoint ?? DefaultEndpoint, modelId)
     {
     }
+
+    public string ModelId { get; } = modelId;
 
     public async Task<float[]> GenerateEmbeddingAsync(string text)
     {
@@ -33,7 +34,7 @@ public class EmbeddingService(IEmbeddingGenerator<string, Embedding<float>> embe
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
             throw new InvalidOperationException(
-                $"Could not reach Ollama to generate the embedding. Ensure Ollama is running ('ollama serve') at {this.endpoint} and that the '{this.modelId}' model is pulled ('ollama pull {this.modelId}').",
+                $"Could not reach Ollama to generate the embedding. Ensure Ollama is running ('ollama serve') at {this.endpoint} and that the '{this.ModelId}' model is pulled ('ollama pull {this.ModelId}').",
                 ex);
         }
     }

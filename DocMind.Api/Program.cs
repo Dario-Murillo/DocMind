@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using DocMind.Api;
 using DocMind.Api.Contracts;
 using DocMind.Core.Chunking;
@@ -29,16 +30,15 @@ builder.Services.AddCors(options => options.AddPolicy(angularDevCorsPolicy, poli
             .AllowAnyMethod()
             .AllowCredentials()));
 
-// All of DocumentService's and QueryService's own dependencies are singletons (the chunking
-// tokenizer, the Ollama-backed embedding/completion clients, and the shared in-memory vector
-// store), and neither service holds any per-request state itself, so registering them as
-// singletons too avoids pointless per-request allocations without changing behavior.
+// The chunking tokenizer and the Ollama-backed embedding/completion clients hold no per-request
+// state, so they are singletons. The services that use DocMindDbContext are scoped like the context
+// itself, which EF Core registers per request; QueryService is scoped too, since it depends on one.
 builder.Services.AddSingleton<IChunkingService, ChunkingService>();
 builder.Services.AddSingleton<IEmbeddingService, EmbeddingService>();
-builder.Services.AddSingleton<IVectorStoreService, InMemoryVectorStoreService>();
-builder.Services.AddSingleton<IDocumentService, DocumentService>();
 builder.Services.AddSingleton<ICompletionService, CompletionService>();
-builder.Services.AddSingleton<IQueryService, QueryService>();
+builder.Services.AddScoped<IVectorStoreService, PgVectorStoreService>();
+builder.Services.AddScoped<IDocumentService, DocumentService>();
+builder.Services.AddScoped<IQueryService, QueryService>();
 
 var connectionString = builder.Configuration.GetConnectionString("DocMind") ??
     throw new InvalidOperationException("Connection string 'DocMind' is not configured");
@@ -96,7 +96,7 @@ _ = auth.MapPost("/logout", async (SignInManager<ApplicationUser> signInManager)
 .Produces(StatusCodes.Status204NoContent)
 .Produces(StatusCodes.Status401Unauthorized);
 
-app.MapPost("/documents/upload", async (HttpRequest request, IDocumentService documentService) =>
+app.MapPost("/documents/upload", async (HttpRequest request, ClaimsPrincipal user, IDocumentService documentService) =>
 {
     // Read the form manually rather than binding an IFormFile parameter: the automatic binder
     // short-circuits to a bare, message-less 400 (or throws, depending on ASP.NET Core version
@@ -115,7 +115,7 @@ app.MapPost("/documents/upload", async (HttpRequest request, IDocumentService do
     }
 
     await using var stream = file.OpenReadStream();
-    var documentId = await documentService.IndexDocumentAsync(stream, file.FileName);
+    var documentId = await documentService.IndexDocumentAsync(user.GetUserId(), stream, file.FileName);
 
     return Results.Ok(new UploadDocumentResponse(documentId, file.FileName, "Document indexed successfully."));
 })
@@ -123,14 +123,15 @@ app.MapPost("/documents/upload", async (HttpRequest request, IDocumentService do
 .WithName("UploadDocument")
 .RequireAuthorization()
 .WithSummary("Uploads and indexes a PDF document")
-.WithDescription("Extracts text from the uploaded PDF, splits it into chunks, generates embeddings for each chunk, and stores them so /query can retrieve them later.")
+.WithDescription("Extracts text from the uploaded PDF (25 MB max), splits it into chunks, generates embeddings for each chunk, and stores the document, the file and the chunks for the signed-in user. Uploading the same file twice returns 409.")
 .Produces<UploadDocumentResponse>(StatusCodes.Status200OK)
 .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
 .Produces(StatusCodes.Status401Unauthorized)
+.Produces<ErrorResponse>(StatusCodes.Status409Conflict)
 .Produces<ErrorResponse>(StatusCodes.Status422UnprocessableEntity)
 .Produces<ErrorResponse>(StatusCodes.Status500InternalServerError);
 
-app.MapPost("/query", async (QueryRequest request, IQueryService queryService) =>
+app.MapPost("/query", async (QueryRequest request, ClaimsPrincipal user, IQueryService queryService) =>
 {
     if (string.IsNullOrWhiteSpace(request.Question))
     {
@@ -138,7 +139,7 @@ app.MapPost("/query", async (QueryRequest request, IQueryService queryService) =
     }
 
     var topK = request.TopK ?? 5;
-    var result = await queryService.AskAsync(request.Question, topK);
+    var result = await queryService.AskAsync(user.GetUserId(), request.Question, topK);
 
     var sources = result.Sources
         .Select(scored => new SourceResult(
@@ -153,7 +154,7 @@ app.MapPost("/query", async (QueryRequest request, IQueryService queryService) =
 .WithName("Query")
 .RequireAuthorization()
 .WithSummary("Answers a question using retrieval-augmented generation over indexed documents")
-.WithDescription("Embeds the question, retrieves the most relevant chunks from the vector store, and asks the completion model to answer using only that context. Returns an empty source list and a natural 'no documents indexed yet' answer if the vector store is empty.")
+.WithDescription("Embeds the question, retrieves the most similar chunks from the signed-in user's documents, and asks the completion model to answer using only that context. Returns an empty source list and a natural 'no documents indexed yet' answer if the user has no documents.")
 .Produces<QueryResponse>(StatusCodes.Status200OK)
 .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
 .Produces(StatusCodes.Status401Unauthorized)

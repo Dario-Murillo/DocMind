@@ -2,5 +2,5 @@ namespace DocMind.Core.Query;
 
 public interface IQueryService
 {
-    public Task<QueryResult> AskAsync(string question, int topK = 5);
+    public Task<QueryResult> AskAsync(Guid userId, string question, int topK = 5);
 }

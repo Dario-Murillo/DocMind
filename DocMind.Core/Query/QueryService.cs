@@ -13,7 +13,7 @@ public class QueryService(
     private readonly IVectorStoreService vectorStoreService = vectorStoreService ?? throw new ArgumentNullException(nameof(vectorStoreService));
     private readonly ICompletionService completionService = completionService ?? throw new ArgumentNullException(nameof(completionService));
 
-    public async Task<QueryResult> AskAsync(string question, int topK = 5)
+    public async Task<QueryResult> AskAsync(Guid userId, string question, int topK = 5)
     {
         if (string.IsNullOrWhiteSpace(question))
         {
@@ -21,7 +21,7 @@ public class QueryService(
         }
 
         var queryVector = await this.embeddingService.GenerateEmbeddingAsync(question);
-        var scoredChunks = this.vectorStoreService.Search(queryVector, topK);
+        var scoredChunks = await this.vectorStoreService.SearchAsync(userId, queryVector, topK);
         var contextChunks = scoredChunks.Select(scored => scored.Chunk).ToList();
 
         var answer = await this.completionService.GenerateAnswerAsync(question, contextChunks);
