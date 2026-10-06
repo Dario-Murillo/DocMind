@@ -94,6 +94,27 @@ public class DocumentService(
         return document.Id;
     }
 
+    public Task<List<DocumentSummary>> ListDocumentsAsync(Guid userId) =>
+        this.dbContext.Documents
+            .Where(document => document.UserId == userId)
+            .OrderByDescending(document => document.CreatedAt)
+            .Select(document => new DocumentSummary(document.Id, document.FileName, document.SizeBytes, document.CreatedAt))
+            .ToListAsync();
+
+    // Filtering by both id and owner means another user's document behaves exactly like a missing one.
+    public Task<DocumentFileContent?> GetFileAsync(Guid userId, Guid documentId) =>
+        this.dbContext.Documents
+            .Where(document => document.Id == documentId && document.UserId == userId)
+            .Select(document => new DocumentFileContent(document.FileName, document.File!.Content))
+            .SingleOrDefaultAsync();
+
+    // A single DELETE without loading the document first. Its file and chunks are removed by the
+    // database's ON DELETE CASCADE, not by EF, which never sees them.
+    public async Task<bool> DeleteDocumentAsync(Guid userId, Guid documentId) =>
+        await this.dbContext.Documents
+            .Where(document => document.Id == documentId && document.UserId == userId)
+            .ExecuteDeleteAsync() > 0;
+
     private static async Task<byte[]> ReadAllBytesAsync(Stream stream)
     {
         using var buffer = new MemoryStream();

@@ -96,7 +96,9 @@ _ = auth.MapPost("/logout", async (SignInManager<ApplicationUser> signInManager)
 .Produces(StatusCodes.Status204NoContent)
 .Produces(StatusCodes.Status401Unauthorized);
 
-app.MapPost("/documents/upload", async (HttpRequest request, ClaimsPrincipal user, IDocumentService documentService) =>
+var documents = app.MapGroup("/documents").WithTags("Documents").RequireAuthorization();
+
+_ = documents.MapPost("/upload", async (HttpRequest request, ClaimsPrincipal user, IDocumentService documentService) =>
 {
     // Read the form manually rather than binding an IFormFile parameter: the automatic binder
     // short-circuits to a bare, message-less 400 (or throws, depending on ASP.NET Core version
@@ -121,7 +123,6 @@ app.MapPost("/documents/upload", async (HttpRequest request, ClaimsPrincipal use
 })
 .Accepts<IFormFile>("multipart/form-data")
 .WithName("UploadDocument")
-.RequireAuthorization()
 .WithSummary("Uploads and indexes a PDF document")
 .WithDescription("Extracts text from the uploaded PDF (25 MB max), splits it into chunks, generates embeddings for each chunk, and stores the document, the file and the chunks for the signed-in user. Uploading the same file twice returns 409.")
 .Produces<UploadDocumentResponse>(StatusCodes.Status200OK)
@@ -130,6 +131,43 @@ app.MapPost("/documents/upload", async (HttpRequest request, ClaimsPrincipal use
 .Produces<ErrorResponse>(StatusCodes.Status409Conflict)
 .Produces<ErrorResponse>(StatusCodes.Status422UnprocessableEntity)
 .Produces<ErrorResponse>(StatusCodes.Status500InternalServerError);
+
+_ = documents.MapGet(string.Empty, async (ClaimsPrincipal user, IDocumentService documentService) =>
+{
+    var summaries = await documentService.ListDocumentsAsync(user.GetUserId());
+
+    return Results.Ok(summaries
+        .Select(summary => new DocumentResponse(summary.Id, summary.FileName, summary.SizeBytes, summary.CreatedAt))
+        .ToList());
+})
+.WithName("ListDocuments")
+.WithSummary("Lists the signed-in user's documents, newest first")
+.Produces<List<DocumentResponse>>(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status401Unauthorized);
+
+_ = documents.MapGet("/{documentId:guid}/file", async (Guid documentId, ClaimsPrincipal user, IDocumentService documentService) =>
+{
+    var file = await documentService.GetFileAsync(user.GetUserId(), documentId);
+
+    return file is null
+        ? Results.NotFound(new ErrorResponse("Document not found."))
+        : Results.File(file.Content, "application/pdf", file.FileName);
+})
+.WithName("DownloadDocumentFile")
+.WithSummary("Downloads the original PDF of one of the signed-in user's documents")
+.Produces(StatusCodes.Status200OK, contentType: "application/pdf")
+.Produces(StatusCodes.Status401Unauthorized)
+.Produces<ErrorResponse>(StatusCodes.Status404NotFound);
+
+_ = documents.MapDelete("/{documentId:guid}", async (Guid documentId, ClaimsPrincipal user, IDocumentService documentService) =>
+    await documentService.DeleteDocumentAsync(user.GetUserId(), documentId)
+        ? Results.NoContent()
+        : Results.NotFound(new ErrorResponse("Document not found.")))
+.WithName("DeleteDocument")
+.WithSummary("Deletes one of the signed-in user's documents, with its file and chunks")
+.Produces(StatusCodes.Status204NoContent)
+.Produces(StatusCodes.Status401Unauthorized)
+.Produces<ErrorResponse>(StatusCodes.Status404NotFound);
 
 app.MapPost("/query", async (QueryRequest request, ClaimsPrincipal user, IQueryService queryService) =>
 {
