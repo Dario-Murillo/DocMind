@@ -31,3 +31,8 @@
   margin: 0;
   box-sizing: border-box;
 }
+
+.document-actions {
+  display: flex;
+  align-items: center;
+}

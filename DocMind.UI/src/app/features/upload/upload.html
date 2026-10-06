@@ -47,13 +47,32 @@
     <p class="message error">{{ message() }}</p>
   }
 
-  @if (indexedDocuments().length > 0) {
-    <h3>Indexed documents</h3>
+  <h3>Your documents</h3>
+  @if (documents().length === 0) {
+    <p class="hint">No documents yet. Upload a PDF to start asking questions about it.</p>
+  } @else {
     <mat-list>
-      @for (document of indexedDocuments(); track document.documentId) {
+      @for (document of documents(); track document.documentId) {
         <mat-list-item>
           <mat-icon matListItemIcon>description</mat-icon>
           <span matListItemTitle>{{ document.fileName }}</span>
+          <span matListItemLine>
+            {{ document.sizeBytes / 1024 | number: '1.0-0' }} KB ·
+            {{ document.createdAt | date: 'short' }}
+          </span>
+          <span matListItemMeta class="document-actions">
+            <a mat-icon-button [href]="fileUrl(document.documentId)" aria-label="Download">
+              <mat-icon>download</mat-icon>
+            </a>
+            <button
+              mat-icon-button
+              type="button"
+              aria-label="Delete"
+              (click)="deleteDocument(document)"
+            >
+              <mat-icon>delete</mat-icon>
+            </button>
+          </span>
         </mat-list-item>
       }
     </mat-list>
