@@ -41,9 +41,11 @@ export interface ChatMessage {
 
 export type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
-export interface IndexedDocument {
+export interface DocumentResponse {
   documentId: string;
   fileName: string;
+  sizeBytes: number;
+  createdAt: string;
 }
 
 export interface AuthRequest {
@@ -71,6 +73,20 @@ export class Api {
     const formData = new FormData();
     formData.append('file', file);
     return this.http.post<UploadDocumentResponse>(`${this.baseUrl}/documents/upload`, formData);
+  }
+
+  getDocuments(): Observable<DocumentResponse[]> {
+    return this.http.get<DocumentResponse[]>(`${this.baseUrl}/documents`);
+  }
+
+  // A URL for an <a href> rather than an HttpClient call: the browser downloads the file itself,
+  // sending the session cookie, and the API's Content-Disposition header keeps it on the page.
+  documentFileUrl(documentId: string): string {
+    return `${this.baseUrl}/documents/${documentId}/file`;
+  }
+
+  deleteDocument(documentId: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/documents/${documentId}`);
   }
 
   query(request: QueryRequest): Observable<QueryResponse> {

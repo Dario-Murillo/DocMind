@@ -59,3 +59,19 @@ Content-Type: application/json
 }
 
 ###
+
+### List the signed-in user's documents, newest first.
+GET {{DocMind.Api_HostAddress}}/documents
+
+###
+
+### Download and delete one document. Paste a documentId from the list above.
+@documentId = 00000000-0000-0000-0000-000000000000
+
+GET {{DocMind.Api_HostAddress}}/documents/{{documentId}}/file
+
+###
+
+DELETE {{DocMind.Api_HostAddress}}/documents/{{documentId}}
+
+###

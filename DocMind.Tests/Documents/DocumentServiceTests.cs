@@ -1,20 +1,26 @@
 namespace DocMind.Tests.Documents;
 
-
 using System.Text;
 using DocMind.Core.Chunking;
+using DocMind.Core.Data;
 using DocMind.Core.Documents;
 using DocMind.Core.Embeddings;
-using DocMind.Core.VectorStore;
+using DocMind.Tests.Api;
+using Microsoft.EntityFrameworkCore;
 
-public class DocumentServiceTests
+// Runs against the Postgres container shared by the Api collection: what matters here is what ends
+// up in the database (the vector column, the unique index, the single transaction), which a fake
+// store can't reproduce.
+[Collection(ApiCollectionDefinition.Name)]
+public class DocumentServiceTests(DocMindApiFactory factory)
 {
     [Fact]
     public async Task IndexDocumentAsyncNullPdfStreamThrowsArgumentException()
     {
-        var service = CreateService(out _, out _, out _);
+        await using var dbContext = factory.CreateDbContext();
+        var service = CreateService(dbContext);
 
-        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.IndexDocumentAsync(null!, "file.pdf"));
+        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.IndexDocumentAsync(Guid.NewGuid(), null!, "file.pdf"));
     }
 
     [Theory]
@@ -23,114 +29,109 @@ public class DocumentServiceTests
     [InlineData("   ")]
     public async Task IndexDocumentAsyncNullOrEmptyFileNameThrowsArgumentException(string? fileName)
     {
-        var service = CreateService(out _, out _, out _);
+        await using var dbContext = factory.CreateDbContext();
+        var service = CreateService(dbContext);
         using var stream = new MemoryStream([1, 2, 3]);
 
-        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.IndexDocumentAsync(stream, fileName!));
+        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.IndexDocumentAsync(Guid.NewGuid(), stream, fileName!));
+    }
+
+    [Fact]
+    public async Task IndexDocumentAsyncFileAboveLimitThrowsArgumentException()
+    {
+        await using var dbContext = factory.CreateDbContext();
+        var service = CreateService(dbContext);
+        using var stream = new MemoryStream(new byte[DocumentService.MaxFileSizeBytes + 1]);
+
+        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.IndexDocumentAsync(Guid.NewGuid(), stream, "huge.pdf"));
     }
 
     [Fact]
     public async Task IndexDocumentAsyncPdfWithoutExtractableTextThrowsNoExtractableTextException()
     {
-        var service = CreateService(out _, out _, out _);
-        using var stream = new MemoryStream(BuildMinimalPdf(content: string.Empty));
+        var userId = await factory.CreateUserAsync();
 
-        _ = await Assert.ThrowsAsync<NoExtractableTextException>(() => service.IndexDocumentAsync(stream, "empty.pdf"));
+        _ = await Assert.ThrowsAsync<NoExtractableTextException>(() =>
+            this.IndexAsync(userId, BuildMinimalPdf(content: string.Empty), "empty.pdf"));
     }
 
     [Fact]
-    public async Task IndexDocumentAsyncValidPdfCallsChunkingThenEmbedsAndStoresEachChunkInOrder()
+    public async Task IndexDocumentAsyncValidPdfStoresDocumentFileAndChunks()
     {
-        var callLog = new List<string>();
-        var chunk1 = new Chunk(Guid.NewGuid(), "placeholder", "chunk one content", TokenCount: 3, SequenceNumber: 0);
-        var chunk2 = new Chunk(Guid.NewGuid(), "placeholder", "chunk two content", TokenCount: 3, SequenceNumber: 1);
+        var userId = await factory.CreateUserAsync();
+        var pdf = BuildMinimalPdf("Hello World from DocMind");
 
-        var service = CreateService(out var chunkingService, out var embeddingService, out var vectorStoreService, callLog, [chunk1, chunk2]);
-        using var stream = new MemoryStream(BuildMinimalPdf("Hello World from DocMind"));
+        var documentId = await this.IndexAsync(userId, pdf, "hello.pdf");
 
-        var documentId = await service.IndexDocumentAsync(stream, "hello.pdf");
+        await using var assertContext = factory.CreateDbContext();
+        var document = await assertContext.Documents
+            .Include(document => document.File)
+            .Include(document => document.Chunks)
+            .SingleAsync(document => document.Id == documentId);
 
-        Assert.False(string.IsNullOrWhiteSpace(documentId));
-        Assert.Contains("Hello World from DocMind", chunkingService.ReceivedText);
-        Assert.Equal(documentId, chunkingService.ReceivedDocumentId);
-
+        Assert.Equal(userId, document.UserId);
+        Assert.Equal("hello.pdf", document.FileName);
+        Assert.Equal(pdf.Length, document.SizeBytes);
+        Assert.Equal(64, document.Sha256.Length);
+        Assert.Equal(FakeEmbeddingService.FakeModelId, document.EmbeddingModel);
+        Assert.Equal(pdf, document.File?.Content);
+        Assert.NotEmpty(document.Chunks);
+        Assert.All(document.Chunks, chunk => Assert.Equal(userId, chunk.UserId));
         Assert.Equal(
-            [
-                "Chunk",
-                "Embed:chunk one content",
-                "Add:chunk one content",
-                "Embed:chunk two content",
-                "Add:chunk two content",
-            ],
-            callLog);
-
-        Assert.Equal(2, vectorStoreService.AddedEntries.Count);
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public async Task IndexPlainTextAsyncNullOrEmptyTextThrowsArgumentException(string? text)
-    {
-        var service = CreateService(out _, out _, out _);
-
-        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.IndexPlainTextAsync(text!, "doc.txt"));
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public async Task IndexPlainTextAsyncNullOrEmptyDocumentNameThrowsArgumentException(string? documentName)
-    {
-        var service = CreateService(out _, out _, out _);
-
-        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.IndexPlainTextAsync("some text", documentName!));
+            Enumerable.Range(0, document.Chunks.Count),
+            document.Chunks.Select(chunk => chunk.SequenceNumber).Order());
     }
 
     [Fact]
-    public async Task IndexPlainTextAsyncValidTextCallsChunkingThenEmbedsAndStoresEachChunkInOrder()
+    public async Task IndexDocumentAsyncSameFileTwiceThrowsDuplicateDocumentException()
     {
-        var callLog = new List<string>();
-        var chunk1 = new Chunk(Guid.NewGuid(), "placeholder", "chunk one content", TokenCount: 3, SequenceNumber: 0);
-        var chunk2 = new Chunk(Guid.NewGuid(), "placeholder", "chunk two content", TokenCount: 3, SequenceNumber: 1);
+        var userId = await factory.CreateUserAsync();
+        var pdf = BuildMinimalPdf("Hello World from DocMind");
+        _ = await this.IndexAsync(userId, pdf, "hello.pdf");
 
-        var service = CreateService(out var chunkingService, out var embeddingService, out var vectorStoreService, callLog, [chunk1, chunk2]);
+        var exception = await Assert.ThrowsAsync<DuplicateDocumentException>(() => this.IndexAsync(userId, pdf, "copy.pdf"));
 
-        var documentId = await service.IndexPlainTextAsync("Hello World from DocMind", "hello.txt");
+        Assert.Contains("hello.pdf", exception.Message, StringComparison.Ordinal);
+        await using var assertContext = factory.CreateDbContext();
+        Assert.Equal(1, await assertContext.Documents.CountAsync(document => document.UserId == userId));
+    }
 
-        Assert.False(string.IsNullOrWhiteSpace(documentId));
-        Assert.Equal("Hello World from DocMind", chunkingService.ReceivedText);
-        Assert.Equal(documentId, chunkingService.ReceivedDocumentId);
+    [Fact]
+    public async Task IndexDocumentAsyncSameFileDifferentUsersStoresBoth()
+    {
+        var firstUserId = await factory.CreateUserAsync();
+        var secondUserId = await factory.CreateUserAsync();
+        var pdf = BuildMinimalPdf("Hello World from DocMind");
 
-        Assert.Equal(
-            [
-                "Chunk",
-                "Embed:chunk one content",
-                "Add:chunk one content",
-                "Embed:chunk two content",
-                "Add:chunk two content",
-            ],
-            callLog);
+        var firstDocumentId = await this.IndexAsync(firstUserId, pdf, "hello.pdf");
+        var secondDocumentId = await this.IndexAsync(secondUserId, pdf, "hello.pdf");
 
-        Assert.Equal(2, vectorStoreService.AddedEntries.Count);
+        Assert.NotEqual(firstDocumentId, secondDocumentId);
+    }
+
+    [Fact]
+    public async Task IndexDocumentAsyncEmbeddingFailureStoresNothing()
+    {
+        var userId = await factory.CreateUserAsync();
+
+        // Small chunks so the document yields several of them and the failure happens after at
+        // least one embedding has already succeeded.
+        var chunkingService = new ChunkingService(chunkSizeTokens: 10, overlapTokens: 2, minChunkTokens: 1);
+        var pdf = BuildMinimalPdf(string.Join(' ', Enumerable.Repeat("DocMind", 30)));
+
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            this.IndexAsync(userId, pdf, "hello.pdf", new FakeEmbeddingService(failOnCall: 2), chunkingService));
+
+        await using var assertContext = factory.CreateDbContext();
+        Assert.False(await assertContext.Documents.AnyAsync(document => document.UserId == userId));
+        Assert.False(await assertContext.DocumentChunks.AnyAsync(chunk => chunk.UserId == userId));
     }
 
     private static DocumentService CreateService(
-        out FakeChunkingService chunkingService,
-        out FakeEmbeddingService embeddingService,
-        out FakeVectorStoreService vectorStoreService,
-        List<string>? callLog = null,
-        List<Chunk>? chunksToReturn = null)
-    {
-        callLog ??= [];
-        chunkingService = new FakeChunkingService(callLog, chunksToReturn ?? []);
-        embeddingService = new FakeEmbeddingService(callLog);
-        vectorStoreService = new FakeVectorStoreService(callLog);
-
-        return new DocumentService(chunkingService, embeddingService, vectorStoreService);
-    }
+        DocMindDbContext dbContext,
+        IEmbeddingService? embeddingService = null,
+        IChunkingService? chunkingService = null) =>
+        new(chunkingService ?? new ChunkingService(), embeddingService ?? new FakeEmbeddingService(), dbContext);
 
     // Hand-built minimal single-page PDF (no external PDF-generation library available):
     // header, five direct objects (Catalog, Pages, Page, Font, content stream) and a
@@ -173,40 +174,42 @@ public class DocumentServiceTests
         return ms.ToArray();
     }
 
-    private sealed class FakeChunkingService(List<string> callLog, List<Chunk> chunksToReturn) : IChunkingService
+    // Each call gets its own DbContext, the way each upload request gets its own scope in the API.
+    private async Task<Guid> IndexAsync(
+        Guid userId,
+        byte[] pdf,
+        string fileName,
+        IEmbeddingService? embeddingService = null,
+        IChunkingService? chunkingService = null)
     {
-        public string? ReceivedText { get; private set; }
-        public string? ReceivedDocumentId { get; private set; }
+        await using var dbContext = factory.CreateDbContext();
+        using var stream = new MemoryStream(pdf);
+        var service = CreateService(dbContext, embeddingService, chunkingService);
 
-        public List<Chunk> ChunkText(string text, string sourceDocumentId)
-        {
-            this.ReceivedText = text;
-            this.ReceivedDocumentId = sourceDocumentId;
-            callLog.Add("Chunk");
-            return chunksToReturn;
-        }
+        return await service.IndexDocumentAsync(userId, stream, fileName);
     }
 
-    private sealed class FakeEmbeddingService(List<string> callLog) : IEmbeddingService
+    // Returns a fixed 768-dimensional vector (pgvector rejects any other size for this column),
+    // optionally failing on the nth call to simulate Ollama going down halfway through a document.
+    private sealed class FakeEmbeddingService(int? failOnCall = null) : IEmbeddingService
     {
+        public const string FakeModelId = "fake-embedding-model";
+
+        private int calls;
+
+        public string ModelId => FakeModelId;
+
         public Task<float[]> GenerateEmbeddingAsync(string text)
         {
-            callLog.Add($"Embed:{text}");
-            return Task.FromResult<float[]>([1f, 0f]);
+            this.calls++;
+            if (this.calls == failOnCall)
+            {
+                throw new InvalidOperationException("Simulated Ollama failure.");
+            }
+
+            var vector = new float[DocumentChunk.EmbeddingDimensions];
+            vector[0] = 1f;
+            return Task.FromResult(vector);
         }
-    }
-
-    private sealed class FakeVectorStoreService(List<string> callLog) : IVectorStoreService
-    {
-        public List<(Chunk Chunk, float[] Vector)> AddedEntries { get; } = [];
-
-        public void Add(Chunk chunk, float[] vector)
-        {
-            callLog.Add($"Add:{chunk.Content}");
-            this.AddedEntries.Add((chunk, vector));
-        }
-
-        public List<ScoredChunk> Search(float[] queryVector, int topK = 5) =>
-            throw new NotSupportedException("Not used by DocumentService tests.");
     }
 }

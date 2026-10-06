@@ -1,3 +1,3 @@
 namespace DocMind.Api.Contracts;
 
-public record UploadDocumentResponse(string DocumentId, string FileName, string Message);
+public record UploadDocumentResponse(Guid DocumentId, string FileName, string Message);

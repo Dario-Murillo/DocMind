@@ -34,7 +34,7 @@ public class CompletionServiceTests
         var service = new CompletionService();
         var context = new List<Chunk>
         {
-            new(Guid.NewGuid(), "doc1", "DocMind is a local, self-hosted RAG document Q&A system built on .NET 9.", TokenCount: 15, SequenceNumber: 0),
+            new(Guid.NewGuid(), Guid.NewGuid(),"DocMind is a local, self-hosted RAG document Q&A system built on .NET 9.", TokenCount: 15, SequenceNumber: 0),
         };
 
         var answer = await service.GenerateAnswerAsync("What is DocMind?", context);

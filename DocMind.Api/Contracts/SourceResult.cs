@@ -1,3 +1,3 @@
 namespace DocMind.Api.Contracts;
 
-public record SourceResult(string DocumentId, int SequenceNumber, float Score, string Excerpt);
+public record SourceResult(Guid DocumentId, int SequenceNumber, float Score, string Excerpt);

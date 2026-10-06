@@ -9,7 +9,7 @@ DocMind is a RAG (Retrieval-Augmented Generation) document Q&A system built on .
 - **DocMind.Api** — ASP.NET Core Minimal API (entry point, HTTP endpoints). Targets `Microsoft.NET.Sdk.Web`.
 - **DocMind.Core** — business logic (document ingestion, chunking, embeddings, retrieval, RAG pipeline). Targets `Microsoft.NET.Sdk`, referenced by both Api and Tests.
 - **DocMind.Tests** — xUnit test project, references DocMind.Core.
-- **DocMind.UI** — Angular 22 single-page app (sign in, upload a document, ask a question). Calls DocMind.Api directly from the browser; not part of the `.sln`/`dotnet` build.
+- **DocMind.UI** — Angular 22 single-page app (sign in, upload, download and delete documents, ask a question). Calls DocMind.Api directly from the browser; not part of the `.sln`/`dotnet` build.
 
 The stack:
 
@@ -18,7 +18,7 @@ The stack:
   - **Completion/Chat**: Ollama local, model `llama3.1`.
   - Both served at `http://localhost:11434`.
 - **PdfPig** for extracting text from PDF documents.
-- **PostgreSQL 17 + pgvector** for persistence, accessed through EF Core 9 (`Npgsql.EntityFrameworkCore.PostgreSQL`, `Pgvector.EntityFrameworkCore`). `DocMindDbContext` and its migrations live in `DocMind.Core/Data/`. The schema currently holds the ASP.NET Core Identity user tables and enables the `vector` extension; documents and vectors are still held in memory and shared by all users.
+- **PostgreSQL 17 + pgvector** for persistence, accessed through EF Core 9 (`Npgsql.EntityFrameworkCore.PostgreSQL`, `Pgvector.EntityFrameworkCore`). `DocMindDbContext` and its migrations live in `DocMind.Core/Data/`. The schema holds the ASP.NET Core Identity user tables and each user's documents: `Documents` (metadata), `DocumentFiles` (the original PDF, as `bytea`) and `DocumentChunks` (chunk text plus a `vector(768)` embedding). The entities live in `DocMind.Core/Documents/` and their EF configuration in `DocMind.Core/Data/Configurations/`.
 - **ASP.NET Core Identity** for user accounts (`ApplicationUser` in `DocMind.Core/Users/`), exposed through `MapIdentityApi` under `/auth` with cookie-based sessions.
 
 NuGet packages: `Microsoft.SemanticKernel.Connectors.Ollama` (no `Connectors.OpenAI`).
@@ -32,6 +32,11 @@ Run from the repository root (where `DocMind.sln` lives).
 ```bash
 # Start PostgreSQL + pgvector (host port 5433)
 docker compose up -d
+
+# Open psql on the development database. Table and column names are PascalCase, so quote them:
+# SELECT "FileName" FROM "Documents";  (in Windows PowerShell 5.1, prefer this interactive
+# session over `psql -c '...'`, which strips the inner double quotes)
+docker exec -it docmind-postgres psql -U docmind -d docmind
 
 # Restore local tools (dotnet-ef)
 dotnet tool restore
@@ -90,6 +95,8 @@ Open the UI as `http://localhost:4200`, not `127.0.0.1`: the session cookie only
 - This project uses the standard .editorconfig from RehanSaeed  (github.com/RehanSaeed/EditorConfig). Respect its style rules when generating new code (naming conventions, using directive organization, 
 modern C# syntax preferences). If `dotnet build` shows style warnings, fix them before considering the task complete. Show me the diff before saving.
 - Endpoints that need a signed-in user call `.RequireAuthorization()`. Core services that act on a user's data take the user's id as an explicit `Guid userId` parameter, read from the endpoint's `ClaimsPrincipal` — never through `IHttpContextAccessor` or an ambient "current user" service.
+- Services that use `DocMindDbContext` are registered as scoped, like the context itself, and so is anything that depends on them (`QueryService`). Stateless services (chunking, the Ollama clients) are singletons. A singleton that depends on a scoped service fails at startup in Development.
+- Queries over a user's data filter by both the record's id and `UserId`. Another user's record behaves exactly like a missing one: endpoints return 404, never 403, so they don't reveal that it exists.
 
 ## Angular conventions (DocMind.UI)
 
@@ -103,6 +110,7 @@ modern C# syntax preferences). If `dotnet build` shows style warnings, fix them 
 - The repo root `.editorconfig` and `.gitignore` cover DocMind.UI too; it does not have its own.
 - Routes are defined in `src/app/app.routes.ts`. The signed-in user lives in the `Auth` service (`core/auth.ts`); `authGuard` protects the workspace and `guestGuard` keeps signed-in users off `/login` and `/register`.
 - `credentialsInterceptor` (`core/credentials-interceptor.ts`) sets `withCredentials` on every request, so the session cookie reaches the API across origins, and redirects to `/login` on any 401 outside `/auth/`.
+- File downloads are plain `<a href>` links to the API (`Api.documentFileUrl`), not `HttpClient` blob requests: the browser sends the session cookie and the API's `Content-Disposition: attachment` header saves the file without leaving the page.
 
 ## Technical decisions
 
@@ -113,7 +121,13 @@ modern C# syntax preferences). If `dotnet build` shows style warnings, fix them 
 - **Authentication: ASP.NET Core Identity with cookie sessions.** `MapIdentityApi` provides `/auth/register`, `/auth/login`, `/auth/manage/info` and the rest of Identity's endpoints; `/auth/logout` is a custom endpoint, since Identity doesn't ship one. The UI logs in with `?useCookies=true`, so the session lives in an HttpOnly, `SameSite=Lax` cookie instead of a token the UI would have to store. Without that parameter `/login` returns a bearer token and sets no cookie. Both the cookie and Identity's bearer token are opaque Data Protection payloads, not JWTs. Unauthenticated requests get a 401, not a redirect to a login page. In development the UI (port 4200) and the API (port 5276) are different origins but the same site, so the CORS policy uses `AllowCredentials()`.
 - **`IdentityUserContext<ApplicationUser, Guid>`, without roles.** Guid keys make every future `user_id` foreign key a native `uuid` column. `IdentityUserContext` skips the three role tables that `IdentityDbContext` would add; switching the base class (plus a migration) brings them back if roles are ever needed.
 - **`UseAuthentication()`/`UseAuthorization()` are called explicitly, after `UseCors`.** If left implicit, ASP.NET Core adds them at the start of the pipeline, ahead of CORS, and 401 responses go out without CORS headers — the browser then reports a network error instead of a 401.
-- **API tests use Testcontainers.** `DocMindApiFactory` starts a `pgvector/pgvector:pg17` container and overrides the connection string; the test classes share it through the `Api` xUnit collection. `dotnet test` therefore needs Docker running. Tests that call protected endpoints use `DocMindApiFactory.CreateAuthenticatedClientAsync()`, which registers a fresh user (unique email, since the database is shared) and logs in with a session cookie.
+- **Tests that touch the database use Testcontainers.** `DocMindApiFactory` starts a `pgvector/pgvector:pg17` container and overrides the connection string; the test classes share it through the `Api` xUnit collection. `dotnet test` therefore needs Docker running. Each test creates its own users (unique emails, since the database is shared): `CreateAuthenticatedClientAsync()` / `CreateAuthenticatedUserAsync()` register and log in over HTTP with a session cookie, `CreateUserAsync()` creates a user through Identity for tests that call Core services directly, `CreateDbContext()` returns a fresh context, and `SeedDocumentAsync()` stores a document without Ollama. Core services that use the database (`DocumentService`, `PgVectorStoreService`) are tested against this real Postgres rather than EF's InMemory provider, which supports neither the `vector` type nor unique indexes or transactions.
+- **Documents, PDFs and vectors live in the same Postgres database.** One database means a user's document, file and chunks are written in one transaction, deleted together and filtered by owner in the same query. A dedicated vector database would be a second store to keep in sync. The PDF is stored as `bytea` in its own table (`DocumentFiles`), so listing documents never reads file contents, and uploads are capped at 25 MB (`DocumentService.MaxFileSizeBytes`). `DocumentChunks.UserId` duplicates the document's owner on purpose, so vector search filters by user without a join.
+- **Indexing is all-or-nothing.** `DocumentService` generates every embedding before writing anything, then a single `SaveChangesAsync` inserts the document, its file and its chunks in one transaction. If Ollama fails halfway, nothing is stored. There is no status column: uploads are synchronous, so a stored document is always complete.
+- **Duplicate uploads are detected per user by SHA-256.** `IndexDocumentAsync` checks `(UserId, Sha256)` before extracting text or calling Ollama and throws `DuplicateDocumentException` (409). The unique index on those columns is the actual guarantee, for two concurrent uploads of the same file.
+- **Vector search is exact, without an ANN index yet.** `PgVectorStoreService` filters by `UserId` and orders by cosine distance (`<=>`). The score it returns is cosine similarity (`1 - distance`). An HNSW index would only become worthwhile with many more chunks, and with a per-user filter it needs `hnsw.iterative_scan` to avoid returning fewer than `topK` results.
+- **Deleting a document relies on database cascades.** `DeleteDocumentAsync` runs a single `ExecuteDeleteAsync` without loading the document, and the `ON DELETE CASCADE` foreign keys remove its file and chunks. Deleting a user likewise removes all of their documents.
+- **EF Core migrations are treated as generated code.** `.editorconfig` marks `**/Migrations/*.cs` with `generated_code = true`, so analyzer rules such as CA1861 don't apply to files written by `dotnet ef`.
 
 ## Local requirements
 
