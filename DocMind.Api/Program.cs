@@ -3,6 +3,7 @@ using DocMind.Api;
 using DocMind.Api.Contracts;
 using DocMind.Core.Chunking;
 using DocMind.Core.Completion;
+using DocMind.Core.Conversations;
 using DocMind.Core.Data;
 using DocMind.Core.Documents;
 using DocMind.Core.Embeddings;
@@ -39,6 +40,8 @@ builder.Services.AddSingleton<ICompletionService, CompletionService>();
 builder.Services.AddScoped<IVectorStoreService, PgVectorStoreService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
 builder.Services.AddScoped<IQueryService, QueryService>();
+builder.Services.AddScoped<IConversationService, ConversationService>();
+
 
 var connectionString = builder.Configuration.GetConnectionString("DocMind") ??
     throw new InvalidOperationException("Connection string 'DocMind' is not configured");
