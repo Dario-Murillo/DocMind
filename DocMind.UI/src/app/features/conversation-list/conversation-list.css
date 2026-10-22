@@ -1,0 +1,29 @@
+:host {
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.conversations-card {
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.conversations-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.conversation-item {
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.conversation-item.selected {
+  background: var(--mat-sys-secondary-container);
+}
+
+.conversation-actions {
+  display: flex;
+  align-items: center;
+}

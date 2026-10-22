@@ -1,0 +1,47 @@
+<section class="card conversations-card">
+  <div class="conversations-header">
+    <h2>Conversations</h2>
+    <button
+      matButton
+      type="button"
+      (click)="conversations.startNew()"
+      [disabled]="conversations.status() === 'loading'"
+    >
+      <mat-icon>add</mat-icon>
+      New
+    </button>
+  </div>
+
+  @if (conversations.error(); as error) {
+    <p class="message error">{{ error }}</p>
+  }
+
+  @if (conversations.list().length === 0) {
+    <p class="hint">No conversations yet. Ask a question to start one.</p>
+  } @else {
+    <mat-list>
+      @for (conversation of conversations.list(); track conversation.conversationId) {
+        <mat-list-item
+          class="conversation-item"
+          [class.selected]="conversation.conversationId === conversations.selectedId()"
+          (click)="conversations.open(conversation.conversationId)"
+        >
+          <mat-icon matListItemIcon>chat</mat-icon>
+          <span matListItemTitle>{{ conversation.title }}</span>
+          <span matListItemLine>{{ conversation.updatedAt | date: 'short' }}</span>
+          <span matListItemMeta class="conversation-actions">
+            <button
+              mat-icon-button
+              type="button"
+              aria-label="Delete conversation"
+              [disabled]="conversations.status() === 'loading'"
+              (click)="deleteConversation($event, conversation)"
+            >
+              <mat-icon>delete</mat-icon>
+            </button>
+          </span>
+        </mat-list-item>
+      }
+    </mat-list>
+  }
+</section>
