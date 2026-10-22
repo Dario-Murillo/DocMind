@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { Conversations } from '../../core/conversations';
 import { Query } from './query';
 
 describe('Query', () => {
@@ -10,7 +11,8 @@ describe('Query', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [Query],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      // Workspace provides Conversations in the app (it isn't auto-provided), so the test does too.
+      providers: [provideHttpClient(), provideHttpClientTesting(), Conversations],
     }).compileComponents();
 
     fixture = TestBed.createComponent(Query);

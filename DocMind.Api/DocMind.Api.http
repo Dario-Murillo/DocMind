@@ -49,14 +49,39 @@ Content-Type: application/pdf
 
 ###
 
-### Ask a question over the indexed documents.
-POST {{DocMind.Api_HostAddress}}/query
+### Start a conversation with its first question.
+POST {{DocMind.Api_HostAddress}}/conversations
 Content-Type: application/json
 
 {
   "question": "example question",
   "topK": 5
 }
+
+###
+
+### List the signed-in user's conversations, most recently used first.
+GET {{DocMind.Api_HostAddress}}/conversations
+
+###
+
+### Ask a follow-up, read and delete one conversation. Paste a conversationId from above.
+@conversationId = 00000000-0000-0000-0000-000000000000
+
+POST {{DocMind.Api_HostAddress}}/conversations/{{conversationId}}/messages
+Content-Type: application/json
+
+{
+  "question": "another question"
+}
+
+###
+
+GET {{DocMind.Api_HostAddress}}/conversations/{{conversationId}}
+
+###
+
+DELETE {{DocMind.Api_HostAddress}}/conversations/{{conversationId}}
 
 ###
 

@@ -1,6 +1,7 @@
 namespace DocMind.Tests.Api;
 
 using System.Net.Http.Json;
+using DocMind.Core.Conversations;
 using DocMind.Core.Data;
 using DocMind.Core.Documents;
 using DocMind.Core.Users;
@@ -117,6 +118,46 @@ public sealed class DocMindApiFactory : WebApplicationFactory<Program>, IAsyncLi
         _ = await dbContext.SaveChangesAsync();
 
         return document.Id;
+    }
+
+    // Stores a conversation owned by userId directly through EF, without Ollama: the question
+    // (also used as the title) and an answer. When citedDocumentId is given, the answer has one
+    // source pointing at that document, with its file name copied the way ConversationService does.
+    public async Task<Guid> SeedConversationAsync(Guid userId, string question = "Seed question", Guid? citedDocumentId = null)
+    {
+        await using var dbContext = this.CreateDbContext();
+        var askedAt = DateTimeOffset.UtcNow;
+        var answer = new Message { Role = MessageRole.Assistant, Content = "Seed answer", CreatedAt = askedAt.AddSeconds(1) };
+
+        if (citedDocumentId is not null)
+        {
+            answer.Sources.Add(new MessageSource
+            {
+                DocumentId = citedDocumentId,
+                FileName = await dbContext.Documents
+                    .Where(document => document.Id == citedDocumentId)
+                    .Select(document => document.FileName)
+                    .SingleAsync(),
+                SequenceNumber = 0,
+                Score = 0.9f,
+                Excerpt = "seed",
+            });
+        }
+
+        var conversation = new Conversation
+        {
+            UserId = userId,
+            Title = question,
+            CreatedAt = askedAt,
+            UpdatedAt = answer.CreatedAt,
+        };
+        conversation.Messages.Add(new Message { Role = MessageRole.User, Content = question, CreatedAt = askedAt });
+        conversation.Messages.Add(answer);
+
+        _ = dbContext.Conversations.Add(conversation);
+        _ = await dbContext.SaveChangesAsync();
+
+        return conversation.Id;
     }
 
     async Task IAsyncLifetime.DisposeAsync()

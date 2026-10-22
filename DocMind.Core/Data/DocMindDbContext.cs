@@ -1,5 +1,6 @@
 namespace DocMind.Core.Data;
 
+using DocMind.Core.Conversations;
 using DocMind.Core.Documents;
 using DocMind.Core.Users;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -16,6 +17,12 @@ public class DocMindDbContext(DbContextOptions<DocMindDbContext> options)
     public DbSet<DocumentFile> DocumentFiles => this.Set<DocumentFile>();
 
     public DbSet<DocumentChunk> DocumentChunks => this.Set<DocumentChunk>();
+
+    public DbSet<Conversation> Conversations => this.Set<Conversation>();
+
+    public DbSet<Message> Messages => this.Set<Message>();
+
+    public DbSet<MessageSource> MessageSources => this.Set<MessageSource>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

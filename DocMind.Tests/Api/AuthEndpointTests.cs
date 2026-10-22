@@ -9,11 +9,11 @@ using Microsoft.AspNetCore.Identity.Data;
 public class AuthEndpointTests(DocMindApiFactory factory)
 {
     [Fact]
-    public async Task QueryWithoutSessionReturnsUnauthorized()
+    public async Task StartConversationWithoutSessionReturnsUnauthorized()
     {
         using var client = factory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/query", new QueryRequest("What is DocMind?", null));
+        var response = await client.PostAsJsonAsync("/conversations", new AskRequest("What is DocMind?", null));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }

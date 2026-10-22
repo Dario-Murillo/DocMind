@@ -3,6 +3,7 @@ using DocMind.Api;
 using DocMind.Api.Contracts;
 using DocMind.Core.Chunking;
 using DocMind.Core.Completion;
+using DocMind.Core.Conversations;
 using DocMind.Core.Data;
 using DocMind.Core.Documents;
 using DocMind.Core.Embeddings;
@@ -39,6 +40,8 @@ builder.Services.AddSingleton<ICompletionService, CompletionService>();
 builder.Services.AddScoped<IVectorStoreService, PgVectorStoreService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
 builder.Services.AddScoped<IQueryService, QueryService>();
+builder.Services.AddScoped<IConversationService, ConversationService>();
+
 
 var connectionString = builder.Configuration.GetConnectionString("DocMind") ??
     throw new InvalidOperationException("Connection string 'DocMind' is not configured");
@@ -169,42 +172,9 @@ _ = documents.MapDelete("/{documentId:guid}", async (Guid documentId, ClaimsPrin
 .Produces(StatusCodes.Status401Unauthorized)
 .Produces<ErrorResponse>(StatusCodes.Status404NotFound);
 
-app.MapPost("/query", async (QueryRequest request, ClaimsPrincipal user, IQueryService queryService) =>
-{
-    if (string.IsNullOrWhiteSpace(request.Question))
-    {
-        return Results.BadRequest(new ErrorResponse("Question must not be null or empty."));
-    }
-
-    var topK = request.TopK ?? 5;
-    var result = await queryService.AskAsync(user.GetUserId(), request.Question, topK);
-
-    var sources = result.Sources
-        .Select(scored => new SourceResult(
-            scored.Chunk.DocumentId,
-            scored.Chunk.SequenceNumber,
-            scored.Score,
-            BuildExcerpt(scored.Chunk.Content)))
-        .ToList();
-
-    return Results.Ok(new QueryResponse(result.Answer, sources));
-})
-.WithName("Query")
-.RequireAuthorization()
-.WithSummary("Answers a question using retrieval-augmented generation over indexed documents")
-.WithDescription("Embeds the question, retrieves the most similar chunks from the signed-in user's documents, and asks the completion model to answer using only that context. Returns an empty source list and a natural 'no documents indexed yet' answer if the user has no documents.")
-.Produces<QueryResponse>(StatusCodes.Status200OK)
-.Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
-.Produces(StatusCodes.Status401Unauthorized)
-.Produces<ErrorResponse>(StatusCodes.Status500InternalServerError);
+_ = app.MapConversationEndpoints();
 
 app.Run();
-
-static string BuildExcerpt(string content)
-{
-    const int maxLength = 150;
-    return content.Length <= maxLength ? content : string.Concat(content.AsSpan(0, maxLength), "...");
-}
 
 // Exposes the otherwise-internal top-level Program class so DocMind.Tests can boot the real
 // app via WebApplicationFactory<Program> for integration tests.

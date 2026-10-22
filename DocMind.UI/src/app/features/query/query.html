@@ -1,13 +1,13 @@
 <section class="card chat-card">
-  <h2>Ask a question</h2>
+  <h2>{{ conversations.selectedTitle() }}</h2>
   <p class="hint">Answers are generated only from the context retrieved from uploaded documents.</p>
 
   <div class="chat-messages">
-    @if (messages().length === 0) {
-      <p class="hint">Ask a question about your uploaded documents to get started.</p>
+    @if (conversations.messages().length === 0) {
+      <p class="hint">Ask a question about your uploaded documents to start a conversation.</p>
     }
 
-    @for (message of messages(); track $index) {
+    @for (message of conversations.messages(); track $index) {
       <div class="chat-message" [class.chat-message-user]="message.role === 'user'">
         <div class="chat-bubble" [class.chat-bubble-error]="message.error">
           <p>{{ message.text }}</p>
@@ -16,10 +16,10 @@
             <div class="sources">
               <h3>Sources</h3>
               <ul>
-                @for (source of message.sources; track source.documentId + source.sequenceNumber) {
+                @for (source of message.sources; track $index) {
                   <li>
                     <span class="score">{{ source.score | number: '1.2-2' }}</span>
-                    <span class="doc">{{ source.documentId }} #{{ source.sequenceNumber }}</span>
+                    <span class="doc">{{ source.fileName }} #{{ source.sequenceNumber }}</span>
                     <p class="excerpt">{{ source.excerpt }}</p>
                   </li>
                 }
@@ -30,7 +30,7 @@
       </div>
     }
 
-    @if (status() === 'loading') {
+    @if (conversations.status() === 'loading') {
       <div class="chat-message">
         <div class="chat-bubble">
           <mat-spinner diameter="20" />
@@ -59,7 +59,7 @@
     <button
       matIconButton
       type="submit"
-      [disabled]="!question().trim() || status() === 'loading'"
+      [disabled]="!question().trim() || conversations.status() === 'loading'"
       aria-label="Send question"
     >
       <mat-icon>send</mat-icon>

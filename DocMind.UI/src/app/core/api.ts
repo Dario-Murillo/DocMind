@@ -9,21 +9,43 @@ export interface UploadDocumentResponse {
   message: string;
 }
 
-export interface QueryRequest {
+export interface AskRequest {
   question: string;
   topK?: number;
 }
 
 export interface SourceResult {
-  documentId: string;
+  // null once the cited document has been deleted; fileName and excerpt are copies and remain.
+  documentId: string | null;
+  fileName: string;
   sequenceNumber: number;
   score: number;
   excerpt: string;
 }
 
-export interface QueryResponse {
-  answer: string;
+export interface MessageResponse {
+  messageId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
   sources: SourceResult[];
+}
+
+export interface ConversationResponse {
+  conversationId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConversationDetailResponse extends ConversationResponse {
+  messages: MessageResponse[];
+}
+
+export interface ExchangeResponse {
+  conversation: ConversationResponse;
+  question: MessageResponse;
+  answer: MessageResponse;
 }
 
 export interface ErrorResponse {
@@ -89,8 +111,29 @@ export class Api {
     return this.http.delete<void>(`${this.baseUrl}/documents/${documentId}`);
   }
 
-  query(request: QueryRequest): Observable<QueryResponse> {
-    return this.http.post<QueryResponse>(`${this.baseUrl}/query`, request);
+  getConversations(): Observable<ConversationResponse[]> {
+    return this.http.get<ConversationResponse[]>(`${this.baseUrl}/conversations`);
+  }
+
+  getConversation(conversationId: string): Observable<ConversationDetailResponse> {
+    return this.http.get<ConversationDetailResponse>(
+      `${this.baseUrl}/conversations/${conversationId}`,
+    );
+  }
+
+  startConversation(request: AskRequest): Observable<ExchangeResponse> {
+    return this.http.post<ExchangeResponse>(`${this.baseUrl}/conversations`, request);
+  }
+
+  addMessage(conversationId: string, request: AskRequest): Observable<ExchangeResponse> {
+    return this.http.post<ExchangeResponse>(
+      `${this.baseUrl}/conversations/${conversationId}/messages`,
+      request,
+    );
+  }
+
+  deleteConversation(conversationId: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/conversations/${conversationId}`);
   }
 
   register(request: AuthRequest): Observable<void> {
