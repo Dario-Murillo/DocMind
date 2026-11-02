@@ -10,7 +10,7 @@ public class PgVectorStoreService(DocMindDbContext dbContext) : IVectorStoreServ
 {
     private readonly DocMindDbContext dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
 
-    public async Task<List<ScoredChunk>> SearchAsync(Guid userId, float[] queryVector, int topK = 5)
+    public async Task<List<ScoredChunk>> SearchAsync(Guid userId, Guid notebookId, float[] queryVector, int topK = 5)
     {
         if (queryVector is null || queryVector.Length == 0)
         {
@@ -22,10 +22,10 @@ public class PgVectorStoreService(DocMindDbContext dbContext) : IVectorStoreServ
         var query = new Vector(queryVector);
 
         // Exact nearest-neighbour search: Postgres computes the cosine distance (<=>) to every chunk
-        // of this user, sorts by it and returns the first topK. Score is cosine similarity
+        // of this notebook, sorts by it and returns the first topK. Score is cosine similarity
         // (1 - distance), the same value the in-memory store used to report.
         return await this.dbContext.DocumentChunks
-            .Where(chunk => chunk.UserId == userId)
+            .Where(chunk => chunk.NotebookId == notebookId && chunk.UserId == userId)
             .OrderBy(chunk => chunk.Embedding.CosineDistance(query))
             .Take(topK)
             .Select(chunk => new ScoredChunk(

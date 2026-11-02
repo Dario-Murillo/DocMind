@@ -2,6 +2,7 @@ namespace DocMind.Api;
 
 using DocMind.Api.Contracts;
 using DocMind.Core.Documents;
+using DocMind.Core.Notebooks;
 
 // A single place to translate exceptions raised anywhere in the pipeline (including Minimal API
 // parameter binding, which runs before an endpoint's own body) into consistent JSON error
@@ -15,6 +16,10 @@ public static partial class ApiExceptionHandling
             try
             {
                 await next(context);
+            }
+            catch (NotebookNotFoundException ex)
+            {
+                await WriteError(context, StatusCodes.Status404NotFound, ex.Message);
             }
             catch (NoExtractableTextException ex)
             {

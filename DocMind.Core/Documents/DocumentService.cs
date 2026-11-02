@@ -5,6 +5,7 @@ using System.Text;
 using DocMind.Core.Chunking;
 using DocMind.Core.Data;
 using DocMind.Core.Embeddings;
+using DocMind.Core.Notebooks;
 using Microsoft.EntityFrameworkCore;
 using Pgvector;
 using UglyToad.PdfPig;
@@ -21,7 +22,7 @@ public class DocumentService(
     private readonly IEmbeddingService embeddingService = embeddingService ?? throw new ArgumentNullException(nameof(embeddingService));
     private readonly DocMindDbContext dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
 
-    public async Task<Guid> IndexDocumentAsync(Guid userId, Stream pdfStream, string fileName)
+    public async Task<Guid> IndexDocumentAsync(Guid userId, Guid notebookId, Stream pdfStream, string fileName)
     {
         if (pdfStream is null)
         {
@@ -33,6 +34,8 @@ public class DocumentService(
             throw new ArgumentException("File name must not be null or empty.", nameof(fileName));
         }
 
+        await this.dbContext.EnsureNotebookExistsAsync(userId, notebookId);
+
         var content = await ReadAllBytesAsync(pdfStream);
         if (content.Length > MaxFileSizeBytes)
         {
@@ -43,7 +46,7 @@ public class DocumentService(
         // instead of a full round of Ollama calls.
         var sha256 = Convert.ToHexStringLower(SHA256.HashData(content));
         var existingFileName = await this.dbContext.Documents
-            .Where(document => document.UserId == userId && document.Sha256 == sha256)
+            .Where(document => document.NotebookId == notebookId && document.UserId == userId && document.Sha256 == sha256)
             .Select(document => document.FileName)
             .FirstOrDefaultAsync();
         if (existingFileName is not null)
@@ -62,6 +65,7 @@ public class DocumentService(
         {
             Id = Guid.NewGuid(),
             UserId = userId,
+            NotebookId = notebookId,
             FileName = fileName,
             SizeBytes = content.Length,
             Sha256 = sha256,
@@ -79,6 +83,7 @@ public class DocumentService(
             {
                 Id = chunk.Id,
                 UserId = userId,
+                NotebookId = notebookId,
                 SequenceNumber = chunk.SequenceNumber,
                 Content = chunk.Content,
                 TokenCount = chunk.TokenCount,
@@ -94,12 +99,16 @@ public class DocumentService(
         return document.Id;
     }
 
-    public Task<List<DocumentSummary>> ListDocumentsAsync(Guid userId) =>
-        this.dbContext.Documents
-            .Where(document => document.UserId == userId)
+    public async Task<List<DocumentSummary>> ListDocumentsAsync(Guid userId, Guid notebookId)
+    {
+        await this.dbContext.EnsureNotebookExistsAsync(userId, notebookId);
+
+        return await this.dbContext.Documents
+            .Where(document => document.NotebookId == notebookId && document.UserId == userId)
             .OrderByDescending(document => document.CreatedAt)
             .Select(document => new DocumentSummary(document.Id, document.FileName, document.SizeBytes, document.CreatedAt))
             .ToListAsync();
+    }
 
     // Filtering by both id and owner means another user's document behaves exactly like a missing one.
     public Task<DocumentFileContent?> GetFileAsync(Guid userId, Guid documentId) =>

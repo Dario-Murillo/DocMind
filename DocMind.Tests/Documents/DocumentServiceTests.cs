@@ -5,6 +5,7 @@ using DocMind.Core.Chunking;
 using DocMind.Core.Data;
 using DocMind.Core.Documents;
 using DocMind.Core.Embeddings;
+using DocMind.Core.Notebooks;
 using DocMind.Tests.Api;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,7 +21,7 @@ public class DocumentServiceTests(DocMindApiFactory factory)
         await using var dbContext = factory.CreateDbContext();
         var service = CreateService(dbContext);
 
-        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.IndexDocumentAsync(Guid.NewGuid(), null!, "file.pdf"));
+        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.IndexDocumentAsync(Guid.NewGuid(), Guid.NewGuid(), null!, "file.pdf"));
     }
 
     [Theory]
@@ -33,35 +34,39 @@ public class DocumentServiceTests(DocMindApiFactory factory)
         var service = CreateService(dbContext);
         using var stream = new MemoryStream([1, 2, 3]);
 
-        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.IndexDocumentAsync(Guid.NewGuid(), stream, fileName!));
+        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.IndexDocumentAsync(Guid.NewGuid(), Guid.NewGuid(), stream, fileName!));
     }
 
     [Fact]
     public async Task IndexDocumentAsyncFileAboveLimitThrowsArgumentException()
     {
+        var userId = await factory.CreateUserAsync();
+        var notebookId = await factory.SeedNotebookAsync(userId);
         await using var dbContext = factory.CreateDbContext();
         var service = CreateService(dbContext);
         using var stream = new MemoryStream(new byte[DocumentService.MaxFileSizeBytes + 1]);
 
-        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.IndexDocumentAsync(Guid.NewGuid(), stream, "huge.pdf"));
+        _ = await Assert.ThrowsAsync<ArgumentException>(() => service.IndexDocumentAsync(userId, notebookId, stream, "huge.pdf"));
     }
 
     [Fact]
     public async Task IndexDocumentAsyncPdfWithoutExtractableTextThrowsNoExtractableTextException()
     {
         var userId = await factory.CreateUserAsync();
+        var notebookId = await factory.SeedNotebookAsync(userId);
 
         _ = await Assert.ThrowsAsync<NoExtractableTextException>(() =>
-            this.IndexAsync(userId, BuildMinimalPdf(content: string.Empty), "empty.pdf"));
+            this.IndexAsync(userId, notebookId, BuildMinimalPdf(content: string.Empty), "empty.pdf"));
     }
 
     [Fact]
     public async Task IndexDocumentAsyncValidPdfStoresDocumentFileAndChunks()
     {
         var userId = await factory.CreateUserAsync();
+        var notebookId = await factory.SeedNotebookAsync(userId);
         var pdf = BuildMinimalPdf("Hello World from DocMind");
 
-        var documentId = await this.IndexAsync(userId, pdf, "hello.pdf");
+        var documentId = await this.IndexAsync(userId, notebookId, pdf, "hello.pdf");
 
         await using var assertContext = factory.CreateDbContext();
         var document = await assertContext.Documents
@@ -70,6 +75,7 @@ public class DocumentServiceTests(DocMindApiFactory factory)
             .SingleAsync(document => document.Id == documentId);
 
         Assert.Equal(userId, document.UserId);
+        Assert.Equal(notebookId, document.NotebookId);
         Assert.Equal("hello.pdf", document.FileName);
         Assert.Equal(pdf.Length, document.SizeBytes);
         Assert.Equal(64, document.Sha256.Length);
@@ -77,6 +83,7 @@ public class DocumentServiceTests(DocMindApiFactory factory)
         Assert.Equal(pdf, document.File?.Content);
         Assert.NotEmpty(document.Chunks);
         Assert.All(document.Chunks, chunk => Assert.Equal(userId, chunk.UserId));
+        Assert.All(document.Chunks, chunk => Assert.Equal(notebookId, chunk.NotebookId));
         Assert.Equal(
             Enumerable.Range(0, document.Chunks.Count),
             document.Chunks.Select(chunk => chunk.SequenceNumber).Order());
@@ -86,10 +93,11 @@ public class DocumentServiceTests(DocMindApiFactory factory)
     public async Task IndexDocumentAsyncSameFileTwiceThrowsDuplicateDocumentException()
     {
         var userId = await factory.CreateUserAsync();
+        var notebookId = await factory.SeedNotebookAsync(userId);
         var pdf = BuildMinimalPdf("Hello World from DocMind");
-        _ = await this.IndexAsync(userId, pdf, "hello.pdf");
+        _ = await this.IndexAsync(userId, notebookId, pdf, "hello.pdf");
 
-        var exception = await Assert.ThrowsAsync<DuplicateDocumentException>(() => this.IndexAsync(userId, pdf, "copy.pdf"));
+        var exception = await Assert.ThrowsAsync<DuplicateDocumentException>(() => this.IndexAsync(userId, notebookId, pdf, "copy.pdf"));
 
         Assert.Contains("hello.pdf", exception.Message, StringComparison.Ordinal);
         await using var assertContext = factory.CreateDbContext();
@@ -97,14 +105,56 @@ public class DocumentServiceTests(DocMindApiFactory factory)
     }
 
     [Fact]
+    public async Task IndexDocumentAsyncSameFileInTwoNotebooksStoresBoth()
+    {
+        var userId = await factory.CreateUserAsync();
+        var firstNotebookId = await factory.SeedNotebookAsync(userId);
+        var secondNotebookId = await factory.SeedNotebookAsync(userId);
+        var pdf = BuildMinimalPdf("Hello World from DocMind");
+
+        var firstDocumentId = await this.IndexAsync(userId, firstNotebookId, pdf, "hello.pdf");
+        var secondDocumentId = await this.IndexAsync(userId, secondNotebookId, pdf, "hello.pdf");
+
+        Assert.NotEqual(firstDocumentId, secondDocumentId);
+    }
+
+    [Fact]
+    public async Task IndexDocumentAsyncNotebookOfAnotherUserThrowsNotebookNotFoundException()
+    {
+        var ownerId = await factory.CreateUserAsync();
+        var otherUserId = await factory.CreateUserAsync();
+        var notebookId = await factory.SeedNotebookAsync(ownerId);
+
+        _ = await Assert.ThrowsAsync<NotebookNotFoundException>(() =>
+            this.IndexAsync(otherUserId, notebookId, BuildMinimalPdf("Hello World from DocMind"), "hello.pdf"));
+
+        await using var assertContext = factory.CreateDbContext();
+        Assert.False(await assertContext.Documents.AnyAsync(document => document.NotebookId == notebookId));
+    }
+
+    [Fact]
+    public async Task ListDocumentsAsyncNotebookOfAnotherUserThrowsNotebookNotFoundException()
+    {
+        var ownerId = await factory.CreateUserAsync();
+        var otherUserId = await factory.CreateUserAsync();
+        var notebookId = await factory.SeedNotebookAsync(ownerId);
+        await using var dbContext = factory.CreateDbContext();
+        var service = CreateService(dbContext);
+
+        _ = await Assert.ThrowsAsync<NotebookNotFoundException>(() => service.ListDocumentsAsync(otherUserId, notebookId));
+    }
+
+    [Fact]
     public async Task IndexDocumentAsyncSameFileDifferentUsersStoresBoth()
     {
         var firstUserId = await factory.CreateUserAsync();
         var secondUserId = await factory.CreateUserAsync();
+        var firstNotebookId = await factory.SeedNotebookAsync(firstUserId);
+        var secondNotebookId = await factory.SeedNotebookAsync(secondUserId);
         var pdf = BuildMinimalPdf("Hello World from DocMind");
 
-        var firstDocumentId = await this.IndexAsync(firstUserId, pdf, "hello.pdf");
-        var secondDocumentId = await this.IndexAsync(secondUserId, pdf, "hello.pdf");
+        var firstDocumentId = await this.IndexAsync(firstUserId, firstNotebookId, pdf, "hello.pdf");
+        var secondDocumentId = await this.IndexAsync(secondUserId, secondNotebookId, pdf, "hello.pdf");
 
         Assert.NotEqual(firstDocumentId, secondDocumentId);
     }
@@ -113,6 +163,7 @@ public class DocumentServiceTests(DocMindApiFactory factory)
     public async Task IndexDocumentAsyncEmbeddingFailureStoresNothing()
     {
         var userId = await factory.CreateUserAsync();
+        var notebookId = await factory.SeedNotebookAsync(userId);
 
         // Small chunks so the document yields several of them and the failure happens after at
         // least one embedding has already succeeded.
@@ -120,7 +171,7 @@ public class DocumentServiceTests(DocMindApiFactory factory)
         var pdf = BuildMinimalPdf(string.Join(' ', Enumerable.Repeat("DocMind", 30)));
 
         _ = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            this.IndexAsync(userId, pdf, "hello.pdf", new FakeEmbeddingService(failOnCall: 2), chunkingService));
+            this.IndexAsync(userId, notebookId, pdf, "hello.pdf", new FakeEmbeddingService(failOnCall: 2), chunkingService));
 
         await using var assertContext = factory.CreateDbContext();
         Assert.False(await assertContext.Documents.AnyAsync(document => document.UserId == userId));
@@ -177,6 +228,7 @@ public class DocumentServiceTests(DocMindApiFactory factory)
     // Each call gets its own DbContext, the way each upload request gets its own scope in the API.
     private async Task<Guid> IndexAsync(
         Guid userId,
+        Guid notebookId,
         byte[] pdf,
         string fileName,
         IEmbeddingService? embeddingService = null,
@@ -186,7 +238,7 @@ public class DocumentServiceTests(DocMindApiFactory factory)
         using var stream = new MemoryStream(pdf);
         var service = CreateService(dbContext, embeddingService, chunkingService);
 
-        return await service.IndexDocumentAsync(userId, stream, fileName);
+        return await service.IndexDocumentAsync(userId, notebookId, stream, fileName);
     }
 
     // Returns a fixed 768-dimensional vector (pgvector rejects any other size for this column),

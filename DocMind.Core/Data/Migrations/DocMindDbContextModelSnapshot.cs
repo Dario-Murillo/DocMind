@@ -33,6 +33,9 @@ namespace DocMind.Core.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("NotebookId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -46,7 +49,9 @@ namespace DocMind.Core.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId", "UpdatedAt");
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("NotebookId", "UpdatedAt");
 
                     b.ToTable("Conversations");
                 });
@@ -132,6 +137,9 @@ namespace DocMind.Core.Data.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<Guid>("NotebookId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Sha256")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -146,7 +154,9 @@ namespace DocMind.Core.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId", "Sha256")
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("NotebookId", "Sha256")
                         .IsUnique();
 
                     b.ToTable("Documents");
@@ -169,6 +179,9 @@ namespace DocMind.Core.Data.Migrations
                         .IsRequired()
                         .HasColumnType("vector(768)");
 
+                    b.Property<Guid>("NotebookId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("SequenceNumber")
                         .HasColumnType("integer");
 
@@ -180,7 +193,7 @@ namespace DocMind.Core.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("NotebookId");
 
                     b.HasIndex("DocumentId", "SequenceNumber")
                         .IsUnique();
@@ -200,6 +213,30 @@ namespace DocMind.Core.Data.Migrations
                     b.HasKey("DocumentId");
 
                     b.ToTable("DocumentFiles");
+                });
+
+            modelBuilder.Entity("DocMind.Core.Notebooks.Notebook", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("Notebooks");
                 });
 
             modelBuilder.Entity("DocMind.Core.Users.ApplicationUser", b =>
@@ -333,6 +370,12 @@ namespace DocMind.Core.Data.Migrations
 
             modelBuilder.Entity("DocMind.Core.Conversations.Conversation", b =>
                 {
+                    b.HasOne("DocMind.Core.Notebooks.Notebook", null)
+                        .WithMany()
+                        .HasForeignKey("NotebookId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("DocMind.Core.Users.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -365,6 +408,12 @@ namespace DocMind.Core.Data.Migrations
 
             modelBuilder.Entity("DocMind.Core.Documents.Document", b =>
                 {
+                    b.HasOne("DocMind.Core.Notebooks.Notebook", null)
+                        .WithMany()
+                        .HasForeignKey("NotebookId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("DocMind.Core.Users.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -386,6 +435,15 @@ namespace DocMind.Core.Data.Migrations
                     b.HasOne("DocMind.Core.Documents.Document", null)
                         .WithOne("File")
                         .HasForeignKey("DocMind.Core.Documents.DocumentFile", "DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DocMind.Core.Notebooks.Notebook", b =>
+                {
+                    b.HasOne("DocMind.Core.Users.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

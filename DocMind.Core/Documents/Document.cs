@@ -6,11 +6,13 @@ public class Document
 
     public Guid UserId { get; set; }
 
+    public Guid NotebookId { get; set; }
+
     public required string FileName { get; set; }
 
     public long SizeBytes { get; set; }
 
-    // Hex-encoded SHA-256 of the PDF bytes, used to detect a user uploading the same file twice.
+    // Hex-encoded SHA-256 of the PDF bytes, used to detect the same file being uploaded twice to a notebook.
     public required string Sha256 { get; set; }
 
     // The model that produced the chunk embeddings, so documents can be found and re-indexed if

@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using DocMind.Core.Conversations;
 using DocMind.Core.Data;
 using DocMind.Core.Documents;
+using DocMind.Core.Notebooks;
 using DocMind.Core.Users;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -84,11 +85,24 @@ public sealed class DocMindApiFactory : WebApplicationFactory<Program>, IAsyncLi
             .Options);
     }
 
+    public async Task<Guid> SeedNotebookAsync(Guid userId, string title = "Seed notebook")
+    {
+        var notebook = new Notebook { UserId = userId, Title = title, CreatedAt = DateTimeOffset.UtcNow };
+
+        await using var dbContext = this.CreateDbContext();
+        _ = dbContext.Notebooks.Add(notebook);
+        _ = await dbContext.SaveChangesAsync();
+
+        return notebook.Id;
+    }
+
     // Stores a document owned by userId directly through EF, without Ollama. One chunk with a
-    // placeholder embedding is enough for tests about listing, downloading and deleting.
-    public async Task<Guid> SeedDocumentAsync(Guid userId, string fileName = "seed.pdf", byte[]? content = null)
+    // placeholder embedding is enough for tests about listing, downloading and deleting. Without a
+    // notebookId the document gets a notebook of its own, for tests where the notebook is irrelevant.
+    public async Task<Guid> SeedDocumentAsync(Guid userId, string fileName = "seed.pdf", byte[]? content = null, Guid? notebookId = null)
     {
         content ??= [1, 2, 3];
+        var documentNotebookId = notebookId ?? await this.SeedNotebookAsync(userId);
         var embedding = new float[DocumentChunk.EmbeddingDimensions];
         embedding[0] = 1f;
 
@@ -96,6 +110,7 @@ public sealed class DocMindApiFactory : WebApplicationFactory<Program>, IAsyncLi
         {
             Id = Guid.NewGuid(),
             UserId = userId,
+            NotebookId = documentNotebookId,
             FileName = fileName,
             SizeBytes = content.Length,
             Sha256 = $"{Guid.NewGuid():N}{Guid.NewGuid():N}",
@@ -107,6 +122,7 @@ public sealed class DocMindApiFactory : WebApplicationFactory<Program>, IAsyncLi
         {
             Id = Guid.NewGuid(),
             UserId = userId,
+            NotebookId = documentNotebookId,
             SequenceNumber = 0,
             Content = "seed",
             TokenCount = 1,
@@ -123,7 +139,8 @@ public sealed class DocMindApiFactory : WebApplicationFactory<Program>, IAsyncLi
     // Stores a conversation owned by userId directly through EF, without Ollama: the question
     // (also used as the title) and an answer. When citedDocumentId is given, the answer has one
     // source pointing at that document, with its file name copied the way ConversationService does.
-    public async Task<Guid> SeedConversationAsync(Guid userId, string question = "Seed question", Guid? citedDocumentId = null)
+    // Without a notebookId the conversation goes in the cited document's notebook or in a new one.
+    public async Task<Guid> SeedConversationAsync(Guid userId, string question = "Seed question", Guid? citedDocumentId = null, Guid? notebookId = null)
     {
         await using var dbContext = this.CreateDbContext();
         var askedAt = DateTimeOffset.UtcNow;
@@ -131,13 +148,16 @@ public sealed class DocMindApiFactory : WebApplicationFactory<Program>, IAsyncLi
 
         if (citedDocumentId is not null)
         {
+            var cited = await dbContext.Documents
+                .Where(document => document.Id == citedDocumentId)
+                .Select(document => new { document.FileName, document.NotebookId })
+                .SingleAsync();
+            notebookId ??= cited.NotebookId;
+
             answer.Sources.Add(new MessageSource
             {
                 DocumentId = citedDocumentId,
-                FileName = await dbContext.Documents
-                    .Where(document => document.Id == citedDocumentId)
-                    .Select(document => document.FileName)
-                    .SingleAsync(),
+                FileName = cited.FileName,
                 SequenceNumber = 0,
                 Score = 0.9f,
                 Excerpt = "seed",
@@ -147,6 +167,7 @@ public sealed class DocMindApiFactory : WebApplicationFactory<Program>, IAsyncLi
         var conversation = new Conversation
         {
             UserId = userId,
+            NotebookId = notebookId ?? await this.SeedNotebookAsync(userId),
             Title = question,
             CreatedAt = askedAt,
             UpdatedAt = answer.CreatedAt,

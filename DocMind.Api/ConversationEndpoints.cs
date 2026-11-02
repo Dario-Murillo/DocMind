@@ -10,25 +10,29 @@ public static class ConversationEndpoints
 
     public static IEndpointRouteBuilder MapConversationEndpoints(this IEndpointRouteBuilder app)
     {
+        // A conversation's id and owner are enough to reach it, so only the routes that need to know
+        // the notebook are nested under one.
+        var notebookConversations = app.MapGroup("/notebooks/{notebookId:guid}/conversations").WithTags("Conversations").RequireAuthorization();
         var conversations = app.MapGroup("/conversations").WithTags("Conversations").RequireAuthorization();
 
-        _ = conversations.MapPost(string.Empty, async (AskRequest request, ClaimsPrincipal user, IConversationService conversationService) =>
+        _ = notebookConversations.MapPost(string.Empty, async (Guid notebookId, AskRequest request, ClaimsPrincipal user, IConversationService conversationService) =>
         {
             if (string.IsNullOrWhiteSpace(request.Question))
             {
                 return Results.BadRequest(new ErrorResponse("Question must not be null or empty."));
             }
 
-            var exchange = await conversationService.StartConversationAsync(user.GetUserId(), request.Question, request.TopK ?? DefaultTopK);
+            var exchange = await conversationService.StartConversationAsync(user.GetUserId(), notebookId, request.Question, request.TopK ?? DefaultTopK);
 
             return Results.Created($"/conversations/{exchange.Conversation.Id}", ExchangeResponse.From(exchange));
         })
         .WithName("StartConversation")
-        .WithSummary("Starts a conversation with its first question")
-        .WithDescription("Answers the question with retrieval-augmented generation over the signed-in user's documents, then stores a new conversation, titled after the question, holding the question and the answer. If the answer can't be generated, nothing is stored.")
+        .WithSummary("Starts a conversation in a notebook with its first question")
+        .WithDescription("Answers the question with retrieval-augmented generation over the notebook's documents, then stores a new conversation, titled after the question, holding the question and the answer. If the answer can't be generated, nothing is stored.")
         .Produces<ExchangeResponse>(StatusCodes.Status201Created)
         .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
         .Produces(StatusCodes.Status401Unauthorized)
+        .Produces<ErrorResponse>(StatusCodes.Status404NotFound)
         .Produces<ErrorResponse>(StatusCodes.Status503ServiceUnavailable);
 
         _ = conversations.MapPost("/{conversationId:guid}/messages", async (Guid conversationId, AskRequest request, ClaimsPrincipal user, IConversationService conversationService) =>
@@ -53,16 +57,17 @@ public static class ConversationEndpoints
         .Produces<ErrorResponse>(StatusCodes.Status404NotFound)
         .Produces<ErrorResponse>(StatusCodes.Status503ServiceUnavailable);
 
-        _ = conversations.MapGet(string.Empty, async (ClaimsPrincipal user, IConversationService conversationService) =>
+        _ = notebookConversations.MapGet(string.Empty, async (Guid notebookId, ClaimsPrincipal user, IConversationService conversationService) =>
         {
-            var summaries = await conversationService.ListConversationsAsync(user.GetUserId());
+            var summaries = await conversationService.ListConversationsAsync(user.GetUserId(), notebookId);
 
             return Results.Ok(summaries.Select(ConversationResponse.From).ToList());
         })
         .WithName("ListConversations")
-        .WithSummary("Lists the signed-in user's conversations, most recently used first")
+        .WithSummary("Lists the conversations of one of the signed-in user's notebooks, most recently used first")
         .Produces<List<ConversationResponse>>(StatusCodes.Status200OK)
-        .Produces(StatusCodes.Status401Unauthorized);
+        .Produces(StatusCodes.Status401Unauthorized)
+        .Produces<ErrorResponse>(StatusCodes.Status404NotFound);
 
         _ = conversations.MapGet("/{conversationId:guid}", async (Guid conversationId, ClaimsPrincipal user, IConversationService conversationService) =>
         {
