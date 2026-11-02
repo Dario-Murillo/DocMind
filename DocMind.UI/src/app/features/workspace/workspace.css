@@ -1,10 +1,26 @@
 :host {
-  display: block;
+  display: flex;
+  flex-direction: column;
   height: 100%;
 }
 
+.notebook-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1.5rem 0.5rem;
+}
+
+.notebook-bar h2 {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-sidenav-container {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .app-sidebar {

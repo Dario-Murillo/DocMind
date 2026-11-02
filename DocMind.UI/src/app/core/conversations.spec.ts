@@ -59,11 +59,20 @@ describe('Conversations', () => {
     return { ...conversation(id), messages };
   }
 
+  function load(conversationList: ConversationResponse[] = []): void {
+    conversations.load('n1');
+    http
+      .expectOne((req) => req.method === 'GET' && req.url.endsWith('/notebooks/n1/conversations'))
+      .flush(conversationList);
+  }
+
   function texts(): string[] {
     return conversations.messages().map((chatMessage) => chatMessage.text);
   }
 
-  it('starts a conversation with the first question and asks later ones in it', () => {
+  it('starts a conversation in the notebook and asks later questions in it', () => {
+    load();
+
     conversations.ask('First?', 5);
 
     // The question is on screen while the answer is on its way.
@@ -71,7 +80,7 @@ describe('Conversations', () => {
     expect(texts()).toEqual(['First?']);
 
     const start = http.expectOne(
-      (req) => req.method === 'POST' && req.url.endsWith('/conversations'),
+      (req) => req.method === 'POST' && req.url.endsWith('/notebooks/n1/conversations'),
     );
     expect(start.request.body).toEqual({ question: 'First?', topK: 5 });
     start.flush(exchange(conversation('c1', 'First?'), 'First?', 'First answer'));
@@ -89,10 +98,7 @@ describe('Conversations', () => {
   });
 
   it('moves a conversation to the top of the list when asked in it', () => {
-    conversations.load();
-    http
-      .expectOne((req) => req.method === 'GET' && req.url.endsWith('/conversations'))
-      .flush([conversation('c1'), conversation('c2')]);
+    load([conversation('c1'), conversation('c2')]);
     conversations.open('c2');
     http.expectOne((req) => req.url.endsWith('/conversations/c2')).flush(detail('c2', []));
 
@@ -105,10 +111,12 @@ describe('Conversations', () => {
   });
 
   it('keeps a failed question on screen with the error, without adding a conversation', () => {
+    load();
+
     conversations.ask('First?', 5);
 
     http
-      .expectOne((req) => req.method === 'POST' && req.url.endsWith('/conversations'))
+      .expectOne((req) => req.method === 'POST' && req.url.endsWith('/notebooks/n1/conversations'))
       .flush(
         { message: 'Could not reach Ollama.' },
         { status: 503, statusText: 'Service Unavailable' },
@@ -175,10 +183,7 @@ describe('Conversations', () => {
   });
 
   it('clears the chat when the open conversation is deleted', () => {
-    conversations.load();
-    http
-      .expectOne((req) => req.method === 'GET' && req.url.endsWith('/conversations'))
-      .flush([conversation('c1')]);
+    load([conversation('c1')]);
     conversations.open('c1');
     http
       .expectOne((req) => req.url.endsWith('/conversations/c1'))

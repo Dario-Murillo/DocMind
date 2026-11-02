@@ -9,6 +9,17 @@ export interface UploadDocumentResponse {
   message: string;
 }
 
+export interface NotebookRequest {
+  title: string;
+}
+
+export interface NotebookResponse {
+  notebookId: string;
+  title: string;
+  createdAt: string;
+  documentCount: number;
+}
+
 export interface AskRequest {
   question: string;
   topK?: number;
@@ -91,14 +102,37 @@ export class Api {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = environment.apiBaseUrl;
 
-  uploadDocument(file: File): Observable<UploadDocumentResponse> {
-    const formData = new FormData();
-    formData.append('file', file);
-    return this.http.post<UploadDocumentResponse>(`${this.baseUrl}/documents/upload`, formData);
+  getNotebooks(): Observable<NotebookResponse[]> {
+    return this.http.get<NotebookResponse[]>(`${this.baseUrl}/notebooks`);
   }
 
-  getDocuments(): Observable<DocumentResponse[]> {
-    return this.http.get<DocumentResponse[]>(`${this.baseUrl}/documents`);
+  getNotebook(notebookId: string): Observable<NotebookResponse> {
+    return this.http.get<NotebookResponse>(`${this.baseUrl}/notebooks/${notebookId}`);
+  }
+
+  createNotebook(request: NotebookRequest): Observable<NotebookResponse> {
+    return this.http.post<NotebookResponse>(`${this.baseUrl}/notebooks`, request);
+  }
+
+  renameNotebook(notebookId: string, request: NotebookRequest): Observable<NotebookResponse> {
+    return this.http.patch<NotebookResponse>(`${this.baseUrl}/notebooks/${notebookId}`, request);
+  }
+
+  deleteNotebook(notebookId: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/notebooks/${notebookId}`);
+  }
+
+  uploadDocument(notebookId: string, file: File): Observable<UploadDocumentResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<UploadDocumentResponse>(
+      `${this.baseUrl}/notebooks/${notebookId}/documents`,
+      formData,
+    );
+  }
+
+  getDocuments(notebookId: string): Observable<DocumentResponse[]> {
+    return this.http.get<DocumentResponse[]>(`${this.baseUrl}/notebooks/${notebookId}/documents`);
   }
 
   // A URL for an <a href> rather than an HttpClient call: the browser downloads the file itself,
@@ -111,8 +145,10 @@ export class Api {
     return this.http.delete<void>(`${this.baseUrl}/documents/${documentId}`);
   }
 
-  getConversations(): Observable<ConversationResponse[]> {
-    return this.http.get<ConversationResponse[]>(`${this.baseUrl}/conversations`);
+  getConversations(notebookId: string): Observable<ConversationResponse[]> {
+    return this.http.get<ConversationResponse[]>(
+      `${this.baseUrl}/notebooks/${notebookId}/conversations`,
+    );
   }
 
   getConversation(conversationId: string): Observable<ConversationDetailResponse> {
@@ -121,8 +157,11 @@ export class Api {
     );
   }
 
-  startConversation(request: AskRequest): Observable<ExchangeResponse> {
-    return this.http.post<ExchangeResponse>(`${this.baseUrl}/conversations`, request);
+  startConversation(notebookId: string, request: AskRequest): Observable<ExchangeResponse> {
+    return this.http.post<ExchangeResponse>(
+      `${this.baseUrl}/notebooks/${notebookId}/conversations`,
+      request,
+    );
   }
 
   addMessage(conversationId: string, request: AskRequest): Observable<ExchangeResponse> {

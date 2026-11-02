@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, input, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatButtonModule } from '@angular/material/button';
@@ -22,6 +22,8 @@ import { Api, ErrorResponse, UploadStatus, DocumentResponse } from '../../core/a
 })
 export class Upload implements OnInit {
   private readonly api = inject(Api);
+
+  readonly notebookId = input.required<string>();
 
   protected readonly selectedFile = signal<File | null>(null);
   protected readonly status = signal<UploadStatus>('idle');
@@ -69,7 +71,7 @@ export class Upload implements OnInit {
     this.status.set('uploading');
     this.message.set(null);
 
-    this.api.uploadDocument(file).subscribe({
+    this.api.uploadDocument(this.notebookId(), file).subscribe({
       next: (response) => {
         this.status.set('success');
         this.message.set(response.message);
@@ -106,7 +108,7 @@ export class Upload implements OnInit {
   }
 
   private loadDocuments(): void {
-    this.api.getDocuments().subscribe({
+    this.api.getDocuments(this.notebookId()).subscribe({
       next: (documents) => this.documents.set(documents),
       error: () => {
         this.status.set('error');

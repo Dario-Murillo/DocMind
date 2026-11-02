@@ -23,6 +23,7 @@ describe('ConversationList', () => {
     }).compileComponents();
 
     fixture = TestBed.createComponent(ConversationList);
+    fixture.componentRef.setInput('notebookId', 'n1');
     http = TestBed.inject(HttpTestingController);
     await fixture.whenStable();
   });
@@ -32,7 +33,7 @@ describe('ConversationList', () => {
   // ngOnInit asks for the list as soon as the component renders, so every test answers it first.
   async function respondWithConversations(conversations: ConversationResponse[]): Promise<void> {
     http
-      .expectOne((req) => req.method === 'GET' && req.url.endsWith('/conversations'))
+      .expectOne((req) => req.method === 'GET' && req.url.endsWith('/notebooks/n1/conversations'))
       .flush(conversations);
     await fixture.whenStable();
   }

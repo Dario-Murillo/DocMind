@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, input } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -15,8 +15,10 @@ import { Conversations } from '../../core/conversations';
 export class ConversationList implements OnInit {
   protected readonly conversations = inject(Conversations);
 
+  readonly notebookId = input.required<string>();
+
   ngOnInit(): void {
-    this.conversations.load();
+    this.conversations.load(this.notebookId());
   }
 
   protected deleteConversation(event: Event, conversation: ConversationResponse): void {
