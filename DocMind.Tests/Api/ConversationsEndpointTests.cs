@@ -14,13 +14,29 @@ public class ConversationsEndpointTests(DocMindApiFactory factory)
     [Fact]
     public async Task StartConversationEmptyQuestionReturnsBadRequest()
     {
-        using var client = await factory.CreateAuthenticatedClientAsync();
+        var (client, userId) = await factory.CreateAuthenticatedUserAsync();
+        using (client)
+        {
+            var notebookId = await factory.SeedNotebookAsync(userId);
 
-        var response = await client.PostAsJsonAsync("/conversations", new AskRequest("   ", null));
+            var response = await client.PostAsJsonAsync($"/notebooks/{notebookId}/conversations", new AskRequest("   ", null));
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<ErrorResponse>();
-        Assert.False(string.IsNullOrWhiteSpace(body?.Message));
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+            Assert.False(string.IsNullOrWhiteSpace(body?.Message));
+        }
+    }
+
+    [Fact]
+    public async Task StartConversationInNotebookOfAnotherUserReturnsNotFound()
+    {
+        var ownerId = await factory.CreateUserAsync();
+        var notebookId = await factory.SeedNotebookAsync(ownerId);
+        using var otherClient = await factory.CreateAuthenticatedClientAsync();
+
+        var response = await otherClient.PostAsJsonAsync($"/notebooks/{notebookId}/conversations", new AskRequest("What is DocMind?", null));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -28,36 +44,40 @@ public class ConversationsEndpointTests(DocMindApiFactory factory)
     public async Task StartConversationReturnsCreatedWithQuestionAndAnswer()
     {
         // Requires a local Ollama instance running with nomic-embed-text and llama3.1 pulled. The
-        // user has no documents, so the answer comes back without sources.
-        using var client = await factory.CreateAuthenticatedClientAsync();
+        // notebook has no documents, so the answer comes back without sources.
+        var (client, userId) = await factory.CreateAuthenticatedUserAsync();
+        using (client)
+        {
+            var notebookId = await factory.SeedNotebookAsync(userId);
 
-        var response = await client.PostAsJsonAsync("/conversations", new AskRequest("What is DocMind?", null));
+            var response = await client.PostAsJsonAsync($"/notebooks/{notebookId}/conversations", new AskRequest("What is DocMind?", null));
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var exchange = await response.Content.ReadFromJsonAsync<ExchangeResponse>();
-        Assert.NotNull(exchange);
-        Assert.Equal($"/conversations/{exchange.Conversation.ConversationId}", response.Headers.Location?.ToString());
-        Assert.Equal("What is DocMind?", exchange.Conversation.Title);
-        Assert.Equal("user", exchange.Question.Role);
-        Assert.Equal("assistant", exchange.Answer.Role);
-        Assert.False(string.IsNullOrWhiteSpace(exchange.Answer.Content));
-        Assert.Empty(exchange.Answer.Sources);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            var exchange = await response.Content.ReadFromJsonAsync<ExchangeResponse>();
+            Assert.NotNull(exchange);
+            Assert.Equal($"/conversations/{exchange.Conversation.ConversationId}", response.Headers.Location?.ToString());
+            Assert.Equal("What is DocMind?", exchange.Conversation.Title);
+            Assert.Equal("user", exchange.Question.Role);
+            Assert.Equal("assistant", exchange.Answer.Role);
+            Assert.False(string.IsNullOrWhiteSpace(exchange.Answer.Content));
+            Assert.Empty(exchange.Answer.Sources);
 
-        var conversation = await client.GetFromJsonAsync<ConversationDetailResponse>(response.Headers.Location);
-        Assert.Equal(2, conversation?.Messages.Count);
+            var conversation = await client.GetFromJsonAsync<ConversationDetailResponse>(response.Headers.Location);
+            Assert.Equal(2, conversation?.Messages.Count);
+        }
     }
 
     [Fact]
-    public async Task ListConversationsReturnsOwnConversations()
+    public async Task ListConversationsReturnsConversationsOfTheNotebook()
     {
         var (client, userId) = await factory.CreateAuthenticatedUserAsync();
         using (client)
         {
-            var otherUserId = await factory.CreateUserAsync();
-            var conversationId = await factory.SeedConversationAsync(userId, "Mine");
-            _ = await factory.SeedConversationAsync(otherUserId, "Someone else's");
+            var notebookId = await factory.SeedNotebookAsync(userId);
+            var conversationId = await factory.SeedConversationAsync(userId, "Mine", notebookId: notebookId);
+            _ = await factory.SeedConversationAsync(userId, "In another notebook");
 
-            var conversations = await client.GetFromJsonAsync<List<ConversationResponse>>("/conversations");
+            var conversations = await client.GetFromJsonAsync<List<ConversationResponse>>($"/notebooks/{notebookId}/conversations");
 
             Assert.NotNull(conversations);
             var conversation = Assert.Single(conversations);

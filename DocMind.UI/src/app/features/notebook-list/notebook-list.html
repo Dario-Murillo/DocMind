@@ -1,0 +1,64 @@
+<section class="notebooks">
+  <h2>Your notebooks</h2>
+  <p class="hint">Each notebook has its own documents and conversations.</p>
+
+  <form class="notebook-form" (submit)="onSubmit($event)">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>New notebook</mat-label>
+      <input
+        matInput
+        type="text"
+        [maxLength]="maxTitleLength"
+        [value]="title()"
+        (input)="onTitleInput($event)"
+        placeholder="Thesis research"
+      />
+    </mat-form-field>
+    <button matButton="filled" type="submit" [disabled]="!title().trim() || creating()">
+      <mat-icon>add</mat-icon>
+      Create
+    </button>
+  </form>
+
+  @if (error(); as message) {
+    <p class="message error">{{ message }}</p>
+  }
+
+  @if (loaded() && notebooks().length === 0) {
+    <p class="hint">No notebooks yet. Create one to start uploading documents.</p>
+  }
+
+  <div class="notebook-grid">
+    @for (notebook of notebooks(); track notebook.notebookId) {
+      <article class="notebook-card">
+        <a class="notebook-link" [routerLink]="['/notebooks', notebook.notebookId]">
+          <mat-icon>menu_book</mat-icon>
+          <h3>{{ notebook.title }}</h3>
+          <p class="hint">
+            {{ notebook.documentCount }}
+            {{ notebook.documentCount === 1 ? 'document' : 'documents' }} ·
+            {{ notebook.createdAt | date: 'mediumDate' }}
+          </p>
+        </a>
+        <span class="notebook-actions">
+          <button
+            matIconButton
+            type="button"
+            aria-label="Rename notebook"
+            (click)="renameNotebook(notebook)"
+          >
+            <mat-icon>edit</mat-icon>
+          </button>
+          <button
+            matIconButton
+            type="button"
+            aria-label="Delete notebook"
+            (click)="deleteNotebook(notebook)"
+          >
+            <mat-icon>delete</mat-icon>
+          </button>
+        </span>
+      </article>
+    }
+  </div>
+</section>

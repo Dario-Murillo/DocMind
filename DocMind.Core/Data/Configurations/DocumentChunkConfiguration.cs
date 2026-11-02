@@ -12,6 +12,6 @@ internal sealed class DocumentChunkConfiguration : IEntityTypeConfiguration<Docu
             .HasColumnType($"vector({DocumentChunk.EmbeddingDimensions})");
 
         _ = builder.HasIndex(chunk => new { chunk.DocumentId, chunk.SequenceNumber }).IsUnique();
-        _ = builder.HasIndex(chunk => chunk.UserId);
+        _ = builder.HasIndex(chunk => chunk.NotebookId);
     }
 }

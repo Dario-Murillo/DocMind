@@ -1,9 +1,18 @@
-<mat-drawer-container class="app-sidenav-container">
-  <mat-drawer class="app-sidebar" mode="side" opened>
-    <app-conversation-list />
-    <app-upload />
-  </mat-drawer>
-  <mat-drawer-content>
-    <app-query />
-  </mat-drawer-content>
-</mat-drawer-container>
+@if (notebook(); as notebook) {
+  <div class="notebook-bar">
+    <a matIconButton routerLink="/" aria-label="Back to notebooks">
+      <mat-icon>arrow_back</mat-icon>
+    </a>
+    <h2>{{ notebook.title }}</h2>
+  </div>
+
+  <mat-drawer-container class="app-sidenav-container">
+    <mat-drawer class="app-sidebar" mode="side" opened>
+      <app-conversation-list [notebookId]="notebookId()" />
+      <app-upload [notebookId]="notebookId()" />
+    </mat-drawer>
+    <mat-drawer-content>
+      <app-query />
+    </mat-drawer-content>
+  </mat-drawer-container>
+}

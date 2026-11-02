@@ -8,6 +8,8 @@ public class Conversation
 
     public Guid UserId { get; set; }
 
+    public Guid NotebookId { get; set; }
+
     // The first question, cut to MaxTitleLength, so the list has a title without asking the
     // model to summarize the conversation.
     public required string Title { get; set; }

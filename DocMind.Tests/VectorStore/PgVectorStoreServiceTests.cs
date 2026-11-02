@@ -12,13 +12,14 @@ using Pgvector;
 public class PgVectorStoreServiceTests(DocMindApiFactory factory)
 {
     [Fact]
-    public async Task SearchAsyncUserWithoutDocumentsReturnsEmptyList()
+    public async Task SearchAsyncNotebookWithoutDocumentsReturnsEmptyList()
     {
         var userId = await factory.CreateUserAsync();
+        var notebookId = await factory.SeedNotebookAsync(userId);
         await using var dbContext = factory.CreateDbContext();
         var store = new PgVectorStoreService(dbContext);
 
-        var results = await store.SearchAsync(userId, Embedding(1f, 0f));
+        var results = await store.SearchAsync(userId, notebookId, Embedding(1f, 0f));
 
         Assert.Empty(results);
     }
@@ -28,11 +29,11 @@ public class PgVectorStoreServiceTests(DocMindApiFactory factory)
     {
         var userId = await factory.CreateUserAsync();
         var vector = Embedding(0.5f, -0.3f);
-        await this.SeedChunksAsync(userId, ("identical", vector));
+        var notebookId = await this.SeedChunksAsync(userId, ("identical", vector));
         await using var dbContext = factory.CreateDbContext();
         var store = new PgVectorStoreService(dbContext);
 
-        var results = await store.SearchAsync(userId, vector);
+        var results = await store.SearchAsync(userId, notebookId, vector);
 
         var result = Assert.Single(results);
         Assert.True(Math.Abs(result.Score - 1.0f) < 0.001f, $"Expected score close to 1.0, got {result.Score}");
@@ -42,7 +43,7 @@ public class PgVectorStoreServiceTests(DocMindApiFactory factory)
     public async Task SearchAsyncReturnsTopKOrderedByDescendingScore()
     {
         var userId = await factory.CreateUserAsync();
-        await this.SeedChunksAsync(
+        var notebookId = await this.SeedChunksAsync(
             userId,
             ("far", Embedding(0.1f, 1f)),
             ("close", Embedding(1f, 0.01f)),
@@ -51,7 +52,7 @@ public class PgVectorStoreServiceTests(DocMindApiFactory factory)
         await using var dbContext = factory.CreateDbContext();
         var store = new PgVectorStoreService(dbContext);
 
-        var results = await store.SearchAsync(userId, Embedding(1f, 0f), topK: 3);
+        var results = await store.SearchAsync(userId, notebookId, Embedding(1f, 0f), topK: 3);
 
         Assert.Equal(["close", "medium", "far"], results.Select(result => result.Chunk.Content));
         Assert.True(results[0].Score > results[1].Score);
@@ -62,13 +63,31 @@ public class PgVectorStoreServiceTests(DocMindApiFactory factory)
     public async Task SearchAsyncTopKGreaterThanStoredCountReturnsAll()
     {
         var userId = await factory.CreateUserAsync();
-        await this.SeedChunksAsync(userId, ("first", Embedding(1f, 0f)), ("second", Embedding(0f, 1f)));
+        var notebookId = await this.SeedChunksAsync(userId, ("first", Embedding(1f, 0f)), ("second", Embedding(0f, 1f)));
         await using var dbContext = factory.CreateDbContext();
         var store = new PgVectorStoreService(dbContext);
 
-        var results = await store.SearchAsync(userId, Embedding(1f, 1f), topK: 50);
+        var results = await store.SearchAsync(userId, notebookId, Embedding(1f, 1f), topK: 50);
 
         Assert.Equal(2, results.Count);
+    }
+
+    [Fact]
+    public async Task SearchAsyncOnlyReturnsChunksOfTheGivenNotebook()
+    {
+        var userId = await factory.CreateUserAsync();
+        var vector = Embedding(1f, 0f);
+        _ = await this.SeedChunksAsync(userId, ("other notebook's chunk", vector));
+        var notebookId = await this.SeedChunksAsync(userId, ("this notebook's chunk", Embedding(0f, 1f)));
+        await using var dbContext = factory.CreateDbContext();
+        var store = new PgVectorStoreService(dbContext);
+
+        // The same user searches with a vector identical to the chunk in their other notebook: the
+        // best match in all of their documents must still stay out of this notebook's results.
+        var results = await store.SearchAsync(userId, notebookId, vector);
+
+        var result = Assert.Single(results);
+        Assert.Equal("this notebook's chunk", result.Chunk.Content);
     }
 
     [Fact]
@@ -77,17 +96,15 @@ public class PgVectorStoreServiceTests(DocMindApiFactory factory)
         var ownerId = await factory.CreateUserAsync();
         var otherUserId = await factory.CreateUserAsync();
         var vector = Embedding(1f, 0f);
-        await this.SeedChunksAsync(ownerId, ("owner's chunk", vector));
-        await this.SeedChunksAsync(otherUserId, ("other user's chunk", Embedding(0f, 1f)));
+        var ownerNotebookId = await this.SeedChunksAsync(ownerId, ("owner's chunk", vector));
         await using var dbContext = factory.CreateDbContext();
         var store = new PgVectorStoreService(dbContext);
 
-        // The other user searches with a vector identical to the owner's chunk: the best match in
-        // the whole table must still be invisible to them.
-        var results = await store.SearchAsync(otherUserId, vector);
+        // Even with the id of the owner's notebook and a vector identical to the chunk in it, the
+        // other user gets nothing: the search filters by user as well as by notebook.
+        var results = await store.SearchAsync(otherUserId, ownerNotebookId, vector);
 
-        var result = Assert.Single(results);
-        Assert.Equal("other user's chunk", result.Chunk.Content);
+        Assert.Empty(results);
     }
 
     [Theory]
@@ -98,7 +115,7 @@ public class PgVectorStoreServiceTests(DocMindApiFactory factory)
         await using var dbContext = factory.CreateDbContext();
         var store = new PgVectorStoreService(dbContext);
 
-        _ = await Assert.ThrowsAsync<ArgumentException>(() => store.SearchAsync(Guid.NewGuid(), queryVector!));
+        _ = await Assert.ThrowsAsync<ArgumentException>(() => store.SearchAsync(Guid.NewGuid(), Guid.NewGuid(), queryVector!));
     }
 
     [Theory]
@@ -109,7 +126,7 @@ public class PgVectorStoreServiceTests(DocMindApiFactory factory)
         await using var dbContext = factory.CreateDbContext();
         var store = new PgVectorStoreService(dbContext);
 
-        _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => store.SearchAsync(Guid.NewGuid(), Embedding(1f, 0f), topK));
+        _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => store.SearchAsync(Guid.NewGuid(), Guid.NewGuid(), Embedding(1f, 0f), topK));
     }
 
     // A vector with the column's 768 dimensions whose only non-zero components are the first two,
@@ -122,13 +139,16 @@ public class PgVectorStoreServiceTests(DocMindApiFactory factory)
         return vector;
     }
 
-    // Stores one document owned by userId with one chunk per (content, embedding) pair.
-    private async Task SeedChunksAsync(Guid userId, params (string Content, float[] Embedding)[] chunks)
+    // Stores one document with one chunk per (content, embedding) pair in a new notebook owned by
+    // userId, and returns the notebook's id.
+    private async Task<Guid> SeedChunksAsync(Guid userId, params (string Content, float[] Embedding)[] chunks)
     {
+        var notebookId = await factory.SeedNotebookAsync(userId);
         var document = new Document
         {
             Id = Guid.NewGuid(),
             UserId = userId,
+            NotebookId = notebookId,
             FileName = "seed.pdf",
             SizeBytes = 0,
             Sha256 = $"{Guid.NewGuid():N}{Guid.NewGuid():N}",
@@ -143,6 +163,7 @@ public class PgVectorStoreServiceTests(DocMindApiFactory factory)
             {
                 Id = Guid.NewGuid(),
                 UserId = userId,
+                NotebookId = notebookId,
                 SequenceNumber = i,
                 Content = chunks[i].Content,
                 TokenCount = 1,
@@ -153,5 +174,7 @@ public class PgVectorStoreServiceTests(DocMindApiFactory factory)
         await using var dbContext = factory.CreateDbContext();
         _ = dbContext.Documents.Add(document);
         _ = await dbContext.SaveChangesAsync();
+
+        return notebookId;
     }
 }

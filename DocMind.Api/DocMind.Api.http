@@ -35,9 +35,45 @@ POST {{DocMind.Api_HostAddress}}/auth/logout
 
 ###
 
-### Upload and index a PDF document.
+### Create a notebook. Documents and conversations live inside one.
+POST {{DocMind.Api_HostAddress}}/notebooks
+Content-Type: application/json
+
+{
+  "title": "My notebook"
+}
+
+###
+
+### List the signed-in user's notebooks, newest first.
+GET {{DocMind.Api_HostAddress}}/notebooks
+
+###
+
+### Read, rename and delete one notebook. Paste a notebookId from the list above: the requests
+### further down use it too.
+@notebookId = 00000000-0000-0000-0000-000000000000
+
+GET {{DocMind.Api_HostAddress}}/notebooks/{{notebookId}}
+
+###
+
+PATCH {{DocMind.Api_HostAddress}}/notebooks/{{notebookId}}
+Content-Type: application/json
+
+{
+  "title": "Renamed notebook"
+}
+
+###
+
+DELETE {{DocMind.Api_HostAddress}}/notebooks/{{notebookId}}
+
+###
+
+### Upload a PDF document to the notebook and index it.
 # Replace the path below with a real .pdf file on your machine before running this request.
-POST {{DocMind.Api_HostAddress}}/documents/upload
+POST {{DocMind.Api_HostAddress}}/notebooks/{{notebookId}}/documents
 Content-Type: multipart/form-data; boundary=----DocMindBoundary
 
 ------DocMindBoundary
@@ -49,8 +85,8 @@ Content-Type: application/pdf
 
 ###
 
-### Start a conversation with its first question.
-POST {{DocMind.Api_HostAddress}}/conversations
+### Start a conversation in the notebook with its first question.
+POST {{DocMind.Api_HostAddress}}/notebooks/{{notebookId}}/conversations
 Content-Type: application/json
 
 {
@@ -60,8 +96,8 @@ Content-Type: application/json
 
 ###
 
-### List the signed-in user's conversations, most recently used first.
-GET {{DocMind.Api_HostAddress}}/conversations
+### List the notebook's conversations, most recently used first.
+GET {{DocMind.Api_HostAddress}}/notebooks/{{notebookId}}/conversations
 
 ###
 
@@ -85,8 +121,8 @@ DELETE {{DocMind.Api_HostAddress}}/conversations/{{conversationId}}
 
 ###
 
-### List the signed-in user's documents, newest first.
-GET {{DocMind.Api_HostAddress}}/documents
+### List the notebook's documents, newest first.
+GET {{DocMind.Api_HostAddress}}/notebooks/{{notebookId}}/documents
 
 ###
 

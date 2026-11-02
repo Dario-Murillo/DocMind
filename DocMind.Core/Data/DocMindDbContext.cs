@@ -2,6 +2,7 @@ namespace DocMind.Core.Data;
 
 using DocMind.Core.Conversations;
 using DocMind.Core.Documents;
+using DocMind.Core.Notebooks;
 using DocMind.Core.Users;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -23,6 +24,8 @@ public class DocMindDbContext(DbContextOptions<DocMindDbContext> options)
     public DbSet<Message> Messages => this.Set<Message>();
 
     public DbSet<MessageSource> MessageSources => this.Set<MessageSource>();
+
+    public DbSet<Notebook> Notebooks => this.Set<Notebook>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

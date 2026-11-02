@@ -10,13 +10,15 @@ import {
   QueryStatus,
 } from './api';
 
-// The signed-in user's conversations and the one open in the chat, shared by the list in the
-// sidebar and the chat itself. autoProvided: false because Workspace provides it: each time the
-// workspace opens it gets a fresh instance, dropped when it closes (e.g. on logout), so one user's
-// conversations never show up for the next.
+// The open notebook's conversations and the one open in the chat, shared by the list in the
+// sidebar and the chat itself. autoProvided: false because Workspace provides it: each time a
+// notebook opens it gets a fresh instance, dropped when it closes (on logout, or when going to
+// another notebook), so nothing from one notebook or user ever shows up in the next.
 @Service({ autoProvided: false })
 export class Conversations {
   private readonly api = inject(Api);
+
+  private notebookId = '';
 
   private readonly conversationList = signal<ConversationResponse[]>([]);
   private readonly openId = signal<string | null>(null);
@@ -36,9 +38,11 @@ export class Conversations {
         ?.title ?? 'New conversation',
   );
 
-  load(): void {
+  // Called once by ConversationList. Questions asked afterwards start conversations in this notebook.
+  load(notebookId: string): void {
+    this.notebookId = notebookId;
     this.listError.set(null);
-    this.api.getConversations().subscribe({
+    this.api.getConversations(notebookId).subscribe({
       next: (conversations) => this.conversationList.set(conversations),
       error: () => this.listError.set('Could not load your conversations.'),
     });
@@ -93,7 +97,7 @@ export class Conversations {
 
     const exchange = conversationId
       ? this.api.addMessage(conversationId, request)
-      : this.api.startConversation(request);
+      : this.api.startConversation(this.notebookId, request);
 
     exchange.subscribe({
       next: (response) => {

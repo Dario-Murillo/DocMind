@@ -23,6 +23,7 @@ describe('Upload', () => {
     }).compileComponents();
 
     fixture = TestBed.createComponent(Upload);
+    fixture.componentRef.setInput('notebookId', 'n1');
     component = fixture.componentInstance;
     http = TestBed.inject(HttpTestingController);
     await fixture.whenStable();
@@ -33,7 +34,7 @@ describe('Upload', () => {
   // ngOnInit asks for the list as soon as the component renders, so every test answers it first.
   async function respondWithDocuments(documents: DocumentResponse[]): Promise<void> {
     http
-      .expectOne((req) => req.method === 'GET' && req.url.endsWith('/documents'))
+      .expectOne((req) => req.method === 'GET' && req.url.endsWith('/notebooks/n1/documents'))
       .flush(documents);
     await fixture.whenStable();
   }
@@ -73,7 +74,7 @@ describe('Upload', () => {
     component['setSelectedFile'](new File(['%PDF-'], 'new.pdf', { type: 'application/pdf' }));
     component['upload']();
     http
-      .expectOne((req) => req.method === 'POST' && req.url.endsWith('/documents/upload'))
+      .expectOne((req) => req.method === 'POST' && req.url.endsWith('/notebooks/n1/documents'))
       .flush({ documentId: 'd2', fileName: 'new.pdf', message: 'Document indexed successfully.' });
     await respondWithDocuments([uploaded, report]);
 

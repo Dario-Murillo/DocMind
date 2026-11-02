@@ -13,23 +13,23 @@ public class DocumentsEndpointTests(DocMindApiFactory factory)
     {
         using var client = factory.CreateClient();
 
-        var response = await client.GetAsync("/documents");
+        var response = await client.GetAsync($"/notebooks/{Guid.NewGuid()}/documents");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
-    public async Task ListDocumentsReturnsOwnDocumentsNewestFirst()
+    public async Task ListDocumentsReturnsDocumentsOfTheNotebookNewestFirst()
     {
         var (client, userId) = await factory.CreateAuthenticatedUserAsync();
         using (client)
         {
-            var otherUserId = await factory.CreateUserAsync();
-            _ = await factory.SeedDocumentAsync(userId, "first.pdf");
-            _ = await factory.SeedDocumentAsync(userId, "second.pdf");
-            _ = await factory.SeedDocumentAsync(otherUserId, "other.pdf");
+            var notebookId = await factory.SeedNotebookAsync(userId);
+            _ = await factory.SeedDocumentAsync(userId, "first.pdf", notebookId: notebookId);
+            _ = await factory.SeedDocumentAsync(userId, "second.pdf", notebookId: notebookId);
+            _ = await factory.SeedDocumentAsync(userId, "other-notebook.pdf");
 
-            var documents = await client.GetFromJsonAsync<List<DocumentResponse>>("/documents");
+            var documents = await client.GetFromJsonAsync<List<DocumentResponse>>($"/notebooks/{notebookId}/documents");
 
             Assert.NotNull(documents);
             Assert.Equal(["second.pdf", "first.pdf"], documents.Select(document => document.FileName));

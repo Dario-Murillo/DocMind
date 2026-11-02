@@ -1,6 +1,7 @@
 namespace DocMind.Core.Conversations;
 
 using DocMind.Core.Data;
+using DocMind.Core.Notebooks;
 using DocMind.Core.Query;
 using DocMind.Core.VectorStore;
 using Microsoft.EntityFrameworkCore;
@@ -12,14 +13,16 @@ public class ConversationService(IQueryService queryService, DocMindDbContext db
     private readonly IQueryService queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
     private readonly DocMindDbContext dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
 
-    public async Task<ConversationExchange> StartConversationAsync(Guid userId, string question, int topK = 5)
+    public async Task<ConversationExchange> StartConversationAsync(Guid userId, Guid notebookId, string question, int topK = 5)
     {
         ValidateQuestion(question);
+        await this.dbContext.EnsureNotebookExistsAsync(userId, notebookId);
 
         var now = DateTimeOffset.UtcNow;
         var conversation = new Conversation
         {
             UserId = userId,
+            NotebookId = notebookId,
             Title = BuildTitle(question),
             CreatedAt = now,
             UpdatedAt = now,
@@ -39,12 +42,16 @@ public class ConversationService(IQueryService queryService, DocMindDbContext db
         return conversation is null ? null : await this.AskAsync(conversation, question, topK);
     }
 
-    public Task<List<ConversationSummary>> ListConversationsAsync(Guid userId) =>
-        this.dbContext.Conversations
-            .Where(conversation => conversation.UserId == userId)
+    public async Task<List<ConversationSummary>> ListConversationsAsync(Guid userId, Guid notebookId)
+    {
+        await this.dbContext.EnsureNotebookExistsAsync(userId, notebookId);
+
+        return await this.dbContext.Conversations
+            .Where(conversation => conversation.NotebookId == notebookId && conversation.UserId == userId)
             .OrderByDescending(conversation => conversation.UpdatedAt)
             .Select(conversation => new ConversationSummary(conversation.Id, conversation.Title, conversation.CreatedAt, conversation.UpdatedAt))
             .ToListAsync();
+    }
 
     // Messages and their sources are two collections. AsSplitQuery loads each with its own query,
     // instead of a single join that repeats every message once per source.
@@ -69,7 +76,7 @@ public class ConversationService(IQueryService queryService, DocMindDbContext db
     {
         // Taken before calling the model, so the answer's timestamp is later than the question's.
         var askedAt = DateTimeOffset.UtcNow;
-        var result = await this.queryService.AskAsync(conversation.UserId, question, topK);
+        var result = await this.queryService.AskAsync(conversation.UserId, conversation.NotebookId, question, topK);
 
         var questionMessage = new Message { Role = MessageRole.User, Content = question, CreatedAt = askedAt };
         var answerMessage = new Message { Role = MessageRole.Assistant, Content = result.Answer, CreatedAt = DateTimeOffset.UtcNow };

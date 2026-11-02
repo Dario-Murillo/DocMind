@@ -2,6 +2,7 @@ namespace DocMind.Tests.Conversations;
 
 using DocMind.Core.Chunking;
 using DocMind.Core.Conversations;
+using DocMind.Core.Notebooks;
 using DocMind.Core.Query;
 using DocMind.Core.VectorStore;
 using DocMind.Tests.Api;
@@ -21,13 +22,14 @@ public class ConversationServiceTests(DocMindApiFactory factory)
     [InlineData("   ")]
     public async Task StartConversationAsyncNullOrEmptyQuestionThrowsArgumentException(string? question) =>
         _ = await Assert.ThrowsAsync<ArgumentException>(() =>
-            this.UseServiceAsync(service => service.StartConversationAsync(Guid.NewGuid(), question!)));
+            this.UseServiceAsync(service => service.StartConversationAsync(Guid.NewGuid(), Guid.NewGuid(), question!)));
 
     [Fact]
     public async Task StartConversationAsyncStoresQuestionAnswerAndSources()
     {
         var userId = await factory.CreateUserAsync();
-        var documentId = await factory.SeedDocumentAsync(userId, "manual.pdf");
+        var notebookId = await factory.SeedNotebookAsync(userId);
+        var documentId = await factory.SeedDocumentAsync(userId, "manual.pdf", notebookId: notebookId);
 
         // Lowest score first, so the assertion below checks GetConversationAsync's ordering rather
         // than the order the sources were inserted in.
@@ -38,11 +40,13 @@ public class ConversationServiceTests(DocMindApiFactory factory)
         ]);
 
         var exchange = await this.UseServiceAsync(
-            service => service.StartConversationAsync(userId, "What is DocMind?"),
+            service => service.StartConversationAsync(userId, notebookId, "What is DocMind?"),
             queryService);
 
+        Assert.Equal(notebookId, queryService.LastNotebookId);
         var conversation = await this.UseServiceAsync(service => service.GetConversationAsync(userId, exchange.Conversation.Id));
         Assert.NotNull(conversation);
+        Assert.Equal(notebookId, conversation.NotebookId);
         Assert.Equal("What is DocMind?", conversation.Title);
         Assert.Collection(
             conversation.Messages,
@@ -67,9 +71,10 @@ public class ConversationServiceTests(DocMindApiFactory factory)
     public async Task StartConversationAsyncLongQuestionTruncatesTitle()
     {
         var userId = await factory.CreateUserAsync();
+        var notebookId = await factory.SeedNotebookAsync(userId);
         var question = new string('q', Conversation.MaxTitleLength + 50);
 
-        var exchange = await this.UseServiceAsync(service => service.StartConversationAsync(userId, question));
+        var exchange = await this.UseServiceAsync(service => service.StartConversationAsync(userId, notebookId, question));
 
         Assert.Equal(Conversation.MaxTitleLength, exchange.Conversation.Title.Length);
         Assert.EndsWith("…", exchange.Conversation.Title, StringComparison.Ordinal);
@@ -80,9 +85,10 @@ public class ConversationServiceTests(DocMindApiFactory factory)
     public async Task StartConversationAsyncQueryFailureStoresNothing()
     {
         var userId = await factory.CreateUserAsync();
+        var notebookId = await factory.SeedNotebookAsync(userId);
 
         _ = await Assert.ThrowsAsync<InvalidOperationException>(() => this.UseServiceAsync(
-            service => service.StartConversationAsync(userId, "What is DocMind?"),
+            service => service.StartConversationAsync(userId, notebookId, "What is DocMind?"),
             new FakeQueryService(fail: true)));
 
         await using var assertContext = factory.CreateDbContext();
@@ -90,10 +96,26 @@ public class ConversationServiceTests(DocMindApiFactory factory)
     }
 
     [Fact]
+    public async Task StartConversationAsyncNotebookOfAnotherUserThrowsBeforeAsking()
+    {
+        var ownerId = await factory.CreateUserAsync();
+        var otherUserId = await factory.CreateUserAsync();
+        var notebookId = await factory.SeedNotebookAsync(ownerId);
+        var queryService = new FakeQueryService();
+
+        _ = await Assert.ThrowsAsync<NotebookNotFoundException>(() => this.UseServiceAsync(
+            service => service.StartConversationAsync(otherUserId, notebookId, "What is DocMind?"),
+            queryService));
+
+        Assert.Null(queryService.LastNotebookId);
+    }
+
+    [Fact]
     public async Task AddMessageAsyncAppendsExchangeAndUpdatesConversation()
     {
         var userId = await factory.CreateUserAsync();
-        var started = await this.UseServiceAsync(service => service.StartConversationAsync(userId, "First question"));
+        var notebookId = await factory.SeedNotebookAsync(userId);
+        var started = await this.UseServiceAsync(service => service.StartConversationAsync(userId, notebookId, "First question"));
 
         var added = await this.UseServiceAsync(service => service.AddMessageAsync(userId, started.Conversation.Id, "Second question"));
 
@@ -110,11 +132,27 @@ public class ConversationServiceTests(DocMindApiFactory factory)
     }
 
     [Fact]
+    public async Task AddMessageAsyncSearchesInTheNotebookOfTheConversation()
+    {
+        var userId = await factory.CreateUserAsync();
+        var notebookId = await factory.SeedNotebookAsync(userId);
+        var started = await this.UseServiceAsync(service => service.StartConversationAsync(userId, notebookId, "First question"));
+        var queryService = new FakeQueryService();
+
+        _ = await this.UseServiceAsync(
+            service => service.AddMessageAsync(userId, started.Conversation.Id, "Second question"),
+            queryService);
+
+        Assert.Equal(notebookId, queryService.LastNotebookId);
+    }
+
+    [Fact]
     public async Task AddMessageAsyncConversationOfAnotherUserReturnsNullAndStoresNothing()
     {
         var ownerId = await factory.CreateUserAsync();
         var otherUserId = await factory.CreateUserAsync();
-        var started = await this.UseServiceAsync(service => service.StartConversationAsync(ownerId, "Owner's question"));
+        var notebookId = await factory.SeedNotebookAsync(ownerId);
+        var started = await this.UseServiceAsync(service => service.StartConversationAsync(ownerId, notebookId, "Owner's question"));
 
         var added = await this.UseServiceAsync(service => service.AddMessageAsync(otherUserId, started.Conversation.Id, "Intruder's question"));
 
@@ -128,7 +166,8 @@ public class ConversationServiceTests(DocMindApiFactory factory)
     {
         var ownerId = await factory.CreateUserAsync();
         var otherUserId = await factory.CreateUserAsync();
-        var started = await this.UseServiceAsync(service => service.StartConversationAsync(ownerId, "Owner's question"));
+        var notebookId = await factory.SeedNotebookAsync(ownerId);
+        var started = await this.UseServiceAsync(service => service.StartConversationAsync(ownerId, notebookId, "Owner's question"));
 
         var conversation = await this.UseServiceAsync(service => service.GetConversationAsync(otherUserId, started.Conversation.Id));
 
@@ -136,29 +175,42 @@ public class ConversationServiceTests(DocMindApiFactory factory)
     }
 
     [Fact]
-    public async Task ListConversationsAsyncReturnsOwnConversationsMostRecentlyUsedFirst()
+    public async Task ListConversationsAsyncReturnsConversationsOfTheNotebookMostRecentlyUsedFirst()
     {
         var userId = await factory.CreateUserAsync();
-        var otherUserId = await factory.CreateUserAsync();
-        var older = await this.UseServiceAsync(service => service.StartConversationAsync(userId, "Older"));
-        _ = await this.UseServiceAsync(service => service.StartConversationAsync(userId, "Newer"));
-        _ = await this.UseServiceAsync(service => service.StartConversationAsync(otherUserId, "Someone else's"));
+        var notebookId = await factory.SeedNotebookAsync(userId);
+        var otherNotebookId = await factory.SeedNotebookAsync(userId);
+        var older = await this.UseServiceAsync(service => service.StartConversationAsync(userId, notebookId, "Older"));
+        _ = await this.UseServiceAsync(service => service.StartConversationAsync(userId, notebookId, "Newer"));
+        _ = await this.UseServiceAsync(service => service.StartConversationAsync(userId, otherNotebookId, "In another notebook"));
 
         // A new exchange in the older conversation moves it back to the top.
         _ = await this.UseServiceAsync(service => service.AddMessageAsync(userId, older.Conversation.Id, "Follow-up"));
 
-        var conversations = await this.UseServiceAsync(service => service.ListConversationsAsync(userId));
+        var conversations = await this.UseServiceAsync(service => service.ListConversationsAsync(userId, notebookId));
 
         Assert.Equal(["Older", "Newer"], conversations.Select(conversation => conversation.Title));
+    }
+
+    [Fact]
+    public async Task ListConversationsAsyncNotebookOfAnotherUserThrowsNotebookNotFoundException()
+    {
+        var ownerId = await factory.CreateUserAsync();
+        var otherUserId = await factory.CreateUserAsync();
+        var notebookId = await factory.SeedNotebookAsync(ownerId);
+
+        _ = await Assert.ThrowsAsync<NotebookNotFoundException>(() =>
+            this.UseServiceAsync(service => service.ListConversationsAsync(otherUserId, notebookId)));
     }
 
     [Fact]
     public async Task DeleteConversationAsyncRemovesMessagesAndSourcesButKeepsDocument()
     {
         var userId = await factory.CreateUserAsync();
-        var documentId = await factory.SeedDocumentAsync(userId);
+        var notebookId = await factory.SeedNotebookAsync(userId);
+        var documentId = await factory.SeedDocumentAsync(userId, notebookId: notebookId);
         var exchange = await this.UseServiceAsync(
-            service => service.StartConversationAsync(userId, "What is DocMind?"),
+            service => service.StartConversationAsync(userId, notebookId, "What is DocMind?"),
             new FakeQueryService([SourceFrom(documentId)]));
 
         var deleted = await this.UseServiceAsync(service => service.DeleteConversationAsync(userId, exchange.Conversation.Id));
@@ -176,7 +228,8 @@ public class ConversationServiceTests(DocMindApiFactory factory)
     {
         var ownerId = await factory.CreateUserAsync();
         var otherUserId = await factory.CreateUserAsync();
-        var started = await this.UseServiceAsync(service => service.StartConversationAsync(ownerId, "Owner's question"));
+        var notebookId = await factory.SeedNotebookAsync(ownerId);
+        var started = await this.UseServiceAsync(service => service.StartConversationAsync(ownerId, notebookId, "Owner's question"));
 
         var deleted = await this.UseServiceAsync(service => service.DeleteConversationAsync(otherUserId, started.Conversation.Id));
 
@@ -189,9 +242,10 @@ public class ConversationServiceTests(DocMindApiFactory factory)
     public async Task DeletingCitedDocumentKeepsSourceWithoutDocumentId()
     {
         var userId = await factory.CreateUserAsync();
-        var documentId = await factory.SeedDocumentAsync(userId, "manual.pdf");
+        var notebookId = await factory.SeedNotebookAsync(userId);
+        var documentId = await factory.SeedDocumentAsync(userId, "manual.pdf", notebookId: notebookId);
         var exchange = await this.UseServiceAsync(
-            service => service.StartConversationAsync(userId, "What is DocMind?"),
+            service => service.StartConversationAsync(userId, notebookId, "What is DocMind?"),
             new FakeQueryService([SourceFrom(documentId)]));
 
         // The same single DELETE that DocumentService.DeleteDocumentAsync runs.
@@ -224,12 +278,19 @@ public class ConversationServiceTests(DocMindApiFactory factory)
     }
 
     // Stands in for the RAG pipeline: returns a fixed answer with the given sources, or fails the
-    // way QueryService does when Ollama can't be reached.
+    // way QueryService does when Ollama can't be reached. LastNotebookId shows where it was asked to
+    // search, which is what keeps one notebook's answers out of another.
     private sealed class FakeQueryService(List<ScoredChunk>? sources = null, bool fail = false) : IQueryService
     {
-        public Task<QueryResult> AskAsync(Guid userId, string question, int topK = 5) =>
-            fail
+        public Guid? LastNotebookId { get; private set; }
+
+        public Task<QueryResult> AskAsync(Guid userId, Guid notebookId, string question, int topK = 5)
+        {
+            this.LastNotebookId = notebookId;
+
+            return fail
                 ? throw new InvalidOperationException("Could not reach Ollama.")
                 : Task.FromResult(new QueryResult(Answer, sources ?? []));
+        }
     }
 }

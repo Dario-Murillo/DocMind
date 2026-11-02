@@ -12,8 +12,11 @@ public class DocumentChunk
 
     public Guid DocumentId { get; set; }
 
-    // Duplicated from Document on purpose: vector search filters by owner without joining Documents.
+    // Duplicated from Document on purpose: vector search filters by owner and notebook without
+    // joining Documents. Documents never move between notebooks, so the copies can't drift apart.
     public Guid UserId { get; set; }
+
+    public Guid NotebookId { get; set; }
 
     public int SequenceNumber { get; set; }
 

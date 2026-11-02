@@ -13,7 +13,7 @@ public class AuthEndpointTests(DocMindApiFactory factory)
     {
         using var client = factory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/conversations", new AskRequest("What is DocMind?", null));
+        var response = await client.PostAsJsonAsync($"/notebooks/{Guid.NewGuid()}/conversations", new AskRequest("What is DocMind?", null));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -24,7 +24,7 @@ public class AuthEndpointTests(DocMindApiFactory factory)
     {
         using var client = factory.CreateClient();
 
-        var response = await client.PostAsync("/documents/upload", content: null);
+        var response = await client.PostAsync($"/notebooks/{Guid.NewGuid()}/documents", content: null);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
