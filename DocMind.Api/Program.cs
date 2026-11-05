@@ -9,6 +9,7 @@ using DocMind.Core.Notebooks;
 using DocMind.Core.Query;
 using DocMind.Core.Users;
 using DocMind.Core.VectorStore;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
@@ -30,12 +31,18 @@ builder.Services.AddCors(options => options.AddPolicy(angularDevCorsPolicy, poli
             .AllowAnyMethod()
             .AllowCredentials()));
 
+// Where Ollama listens. In Docker, Ollama:Endpoint points at the Ollama on the host
+// (host.docker.internal); when it's missing, both services default to http://localhost:11434.
+var ollamaEndpoint = builder.Configuration["Ollama:Endpoint"] is { Length: > 0 } endpoint
+    ? new Uri(endpoint)
+    : null;
+
 // The chunking tokenizer and the Ollama-backed embedding/completion clients hold no per-request
 // state, so they are singletons. The services that use DocMindDbContext are scoped like the context
 // itself, which EF Core registers per request; QueryService is scoped too, since it depends on one.
 builder.Services.AddSingleton<IChunkingService, ChunkingService>();
-builder.Services.AddSingleton<IEmbeddingService, EmbeddingService>();
-builder.Services.AddSingleton<ICompletionService, CompletionService>();
+builder.Services.AddSingleton<IEmbeddingService>(_ => new EmbeddingService(ollamaEndpoint));
+builder.Services.AddSingleton<ICompletionService>(_ => new CompletionService(ollamaEndpoint));
 builder.Services.AddScoped<IVectorStoreService, PgVectorStoreService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
 builder.Services.AddScoped<IQueryService, QueryService>();
@@ -54,6 +61,15 @@ builder.Services.AddDocMindData(connectionString);
 builder.Services.AddAuthorization();
 builder.Services.AddIdentityApiEndpoints<ApplicationUser>()
     .AddEntityFrameworkStores<DocMindDbContext>();
+
+// The session cookie is encrypted with Data Protection keys. Inside a container they would live
+// in the container's own filesystem and be lost when it's recreated, signing everyone out.
+// DataProtection:KeysPath moves them to a folder that outlives the container (a volume).
+if (builder.Configuration["DataProtection:KeysPath"] is { Length: > 0 } keysPath)
+{
+    _ = builder.Services.AddDataProtection()
+        .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+}
 
 var app = builder.Build();
 

@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to the same branch/PR cancels the run that is still going.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (.NET)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 9.0.x
+
+      - run: dotnet restore
+      - run: dotnet build --no-restore
+      # Integration tests need Ollama, which the runner doesn't have. The rest use
+      # Testcontainers, and ubuntu-latest runners come with Docker.
+      - run: dotnet test --no-build --filter "Category!=Integration"
+
+  frontend:
+    name: Frontend (Angular)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: DocMind.UI
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: DocMind.UI/package-lock.json
+
+      - run: npm ci
+      - run: npx prettier --check src
+      - run: npm test -- --watch=false
+      - run: npm run build
+
+  docker:
+    name: Docker images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # Builds migrate, api and web exactly as `docker compose --profile app up --build` would,
+      # so a broken Dockerfile or a missing file in the build context fails the PR.
+      - run: docker compose --profile app build

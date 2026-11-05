@@ -16,5 +16,50 @@ services:
       timeout: 3s
       retries: 10
 
+  # The services below only start with --profile app, so `docker compose up -d` still
+  # starts just the database for development.
+  migrate:
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: DocMind.Api/Dockerfile
+      target: migrate
+    environment:
+      ConnectionStrings__DocMind: Host=postgres;Database=docmind;Username=docmind;Password=docmind
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: DocMind.Api/Dockerfile
+      target: api
+    environment:
+      ConnectionStrings__DocMind: Host=postgres;Database=docmind;Username=docmind;Password=docmind
+      # Ollama is not containerized: the API uses the one installed on the host.
+      Ollama__Endpoint: http://host.docker.internal:11434
+      DataProtection__KeysPath: /keys
+    extra_hosts:
+      # Docker Desktop already defines host.docker.internal; on Linux this line adds it.
+      - host.docker.internal:host-gateway
+    volumes:
+      - docmind-keys:/keys
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: DocMind.UI/Dockerfile
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      - api
+
 volumes:
   docmind-pgdata:
+  docmind-keys:
