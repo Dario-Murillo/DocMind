@@ -46,3 +46,12 @@ jobs:
       - run: npx prettier --check src
       - run: npm test -- --watch=false
       - run: npm run build
+
+  docker:
+    name: Docker images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # Builds migrate, api and web exactly as `docker compose --profile app up --build` would,
+      # so a broken Dockerfile or a missing file in the build context fails the PR.
+      - run: docker compose --profile app build
