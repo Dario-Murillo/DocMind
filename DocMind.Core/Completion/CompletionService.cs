@@ -11,12 +11,18 @@ public class CompletionService(IChatClient chatClient, Uri? endpoint = null, str
     public const string DefaultModelId = "llama3.1";
     private static readonly Uri DefaultEndpoint = new("http://localhost:11434");
 
+    // Loading llama3.1 and reading a few thousand tokens of context can take minutes when most of
+    // the model runs on the CPU. HttpClient's default timeout (100 s) cut those answers off.
+    // nginx's proxy_read_timeout (300 s) stays above it, so a timeout still reaches the UI as
+    // this service's 503 instead of a bare 504 from nginx.
+    private static readonly TimeSpan RequestTimeout = TimeSpan.FromMinutes(4);
+
     private readonly IChatClient chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
     private readonly Uri endpoint = endpoint ?? DefaultEndpoint;
     private readonly string modelId = modelId;
 
     public CompletionService(Uri? endpoint = null, string modelId = DefaultModelId)
-        : this(new OllamaApiClient(endpoint ?? DefaultEndpoint, modelId), endpoint ?? DefaultEndpoint, modelId)
+        : this(CreateClient(endpoint ?? DefaultEndpoint, modelId), endpoint ?? DefaultEndpoint, modelId)
     {
     }
 
@@ -39,6 +45,13 @@ public class CompletionService(IChatClient chatClient, Uri? endpoint = null, str
             var response = await this.chatClient.GetResponseAsync(prompt);
             return response.Text;
         }
+        // HttpClient reports its own timeout as a TaskCanceledException wrapping a TimeoutException.
+        catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
+        {
+            throw new InvalidOperationException(
+                $"Ollama took longer than {RequestTimeout.TotalMinutes} minutes to generate the answer with '{this.modelId}'. The model may be running mostly on the CPU; try again once it has loaded.",
+                ex);
+        }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
             throw new InvalidOperationException(
@@ -46,6 +59,9 @@ public class CompletionService(IChatClient chatClient, Uri? endpoint = null, str
                 ex);
         }
     }
+
+    private static OllamaApiClient CreateClient(Uri endpoint, string modelId) =>
+        new(new HttpClient { BaseAddress = endpoint, Timeout = RequestTimeout }, modelId);
 
     private static string BuildPrompt(string question, List<Chunk> contextChunks)
     {

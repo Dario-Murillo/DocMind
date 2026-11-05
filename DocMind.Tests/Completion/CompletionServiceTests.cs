@@ -42,6 +42,16 @@ public class CompletionServiceTests
         Assert.False(string.IsNullOrWhiteSpace(answer));
     }
 
+    [Fact]
+    public async Task GenerateAnswerAsyncTimeoutThrowsInvalidOperationExceptionSayingItTookTooLong()
+    {
+        var service = new CompletionService(new TimingOutChatClient());
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => service.GenerateAnswerAsync("What is DocMind?", []));
+
+        Assert.Contains("took longer than 4 minutes", ex.Message, StringComparison.Ordinal);
+    }
+
     private sealed class UnreachableChatClient : IChatClient
     {
         public Task<ChatResponse> GetResponseAsync(
@@ -51,6 +61,24 @@ public class CompletionServiceTests
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
             IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
             => throw new InvalidOperationException("GetStreamingResponseAsync must not be called for invalid input.");
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose()
+        {
+        }
+    }
+
+    // Throws what HttpClient throws when its Timeout elapses.
+    private sealed class TimingOutChatClient : IChatClient
+    {
+        public Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+            => throw new TaskCanceledException("The request was canceled.", new TimeoutException());
+
+        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
 
         public object? GetService(Type serviceType, object? serviceKey = null) => null;
 
