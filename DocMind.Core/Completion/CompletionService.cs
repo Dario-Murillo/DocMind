@@ -5,6 +5,7 @@ using System.Text;
 using DocMind.Core.Chunking;
 using Microsoft.Extensions.AI;
 using OllamaSharp;
+using OllamaSharp.Models;
 
 public class CompletionService(IChatClient chatClient, Uri? endpoint = null, string modelId = CompletionService.DefaultModelId) : ICompletionService
 {
@@ -16,6 +17,11 @@ public class CompletionService(IChatClient chatClient, Uri? endpoint = null, str
     // nginx's proxy_read_timeout (300 s) stays above it, so a timeout still reaches the UI as
     // this service's 503 instead of a bare 504 from nginx.
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromMinutes(4);
+
+    // Ollama's default context window (2048 tokens in many versions) is smaller than a prompt with
+    // ConversationService.MaxTopK chunks, and Ollama truncates a prompt that doesn't fit instead of
+    // failing. 8192 tokens hold the largest prompt DocMind sends plus the answer.
+    private const int ContextWindowTokens = 8192;
 
     private readonly IChatClient chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
     private readonly Uri endpoint = endpoint ?? DefaultEndpoint;
@@ -42,7 +48,8 @@ public class CompletionService(IChatClient chatClient, Uri? endpoint = null, str
 
         try
         {
-            var response = await this.chatClient.GetResponseAsync(prompt);
+            var options = new ChatOptions().AddOllamaOption(OllamaOption.NumCtx, ContextWindowTokens);
+            var response = await this.chatClient.GetResponseAsync(prompt, options);
             return response.Text;
         }
         // HttpClient reports its own timeout as a TaskCanceledException wrapping a TimeoutException.
