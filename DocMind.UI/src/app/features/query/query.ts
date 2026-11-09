@@ -23,6 +23,10 @@ import { Conversations } from '../../core/conversations';
 export class Query {
   protected readonly conversations = inject(Conversations);
 
+  // The API's limits (ConversationService.MaxTopK and MaxQuestionLength).
+  protected readonly maxTopK = 10;
+  protected readonly maxQuestionLength = 2000;
+
   protected readonly question = signal('');
   protected readonly topK = signal(5);
 
@@ -32,7 +36,9 @@ export class Query {
 
   protected onTopKInput(event: Event): void {
     const value = Number((event.target as HTMLInputElement).value);
-    this.topK.set(Number.isFinite(value) && value > 0 ? value : 5);
+    this.topK.set(
+      Number.isFinite(value) && value >= 1 ? Math.min(Math.floor(value), this.maxTopK) : 5,
+    );
   }
 
   protected onSubmit(event: Event): void {
