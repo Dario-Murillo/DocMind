@@ -8,6 +8,11 @@ using Microsoft.EntityFrameworkCore;
 
 public class ConversationService(IQueryService queryService, DocMindDbContext dbContext) : IConversationService
 {
+    // Each chunk is up to 500 tokens, so MaxTopK chunks plus the longest question and the instructions
+    // fit in CompletionService's context window with room left for the answer.
+    public const int MaxTopK = 10;
+    public const int MaxQuestionLength = 2000;
+
     private const int MaxExcerptLength = 150;
 
     private readonly IQueryService queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
@@ -15,7 +20,7 @@ public class ConversationService(IQueryService queryService, DocMindDbContext db
 
     public async Task<ConversationExchange> StartConversationAsync(Guid userId, Guid notebookId, string question, int topK = 5)
     {
-        ValidateQuestion(question);
+        ValidateQuestion(question, topK);
         await this.dbContext.EnsureNotebookExistsAsync(userId, notebookId);
 
         var now = DateTimeOffset.UtcNow;
@@ -34,7 +39,7 @@ public class ConversationService(IQueryService queryService, DocMindDbContext db
 
     public async Task<ConversationExchange?> AddMessageAsync(Guid userId, Guid conversationId, string question, int topK = 5)
     {
-        ValidateQuestion(question);
+        ValidateQuestion(question, topK);
 
         var conversation = await this.dbContext.Conversations
             .SingleOrDefaultAsync(conversation => conversation.Id == conversationId && conversation.UserId == userId);
@@ -119,11 +124,21 @@ public class ConversationService(IQueryService queryService, DocMindDbContext db
             })];
     }
 
-    private static void ValidateQuestion(string question)
+    private static void ValidateQuestion(string question, int topK)
     {
         if (string.IsNullOrWhiteSpace(question))
         {
             throw new ArgumentException("Question must not be null or empty.", nameof(question));
+        }
+
+        if (question.Length > MaxQuestionLength)
+        {
+            throw new ArgumentException($"Question must not exceed {MaxQuestionLength} characters.", nameof(question));
+        }
+
+        if (topK is < 1 or > MaxTopK)
+        {
+            throw new ArgumentException($"Top K must be between 1 and {MaxTopK}.", nameof(topK));
         }
     }
 

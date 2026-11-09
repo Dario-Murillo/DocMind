@@ -42,7 +42,14 @@
   <form class="chat-input-row" (submit)="onSubmit($event)">
     <mat-form-field class="topk-field" appearance="outline" subscriptSizing="dynamic">
       <mat-label>Top K</mat-label>
-      <input matInput type="number" min="1" [value]="topK()" (input)="onTopKInput($event)" />
+      <input
+        matInput
+        type="number"
+        min="1"
+        [max]="maxTopK"
+        [value]="topK()"
+        (input)="onTopKInput($event)"
+      />
     </mat-form-field>
 
     <mat-form-field class="question-field" appearance="outline" subscriptSizing="dynamic">
@@ -50,6 +57,7 @@
       <input
         matInput
         type="text"
+        [maxLength]="maxQuestionLength"
         [value]="question()"
         (input)="onQuestionInput($event)"
         placeholder="What is DocMind?"

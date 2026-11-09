@@ -24,6 +24,19 @@ public class ConversationServiceTests(DocMindApiFactory factory)
         _ = await Assert.ThrowsAsync<ArgumentException>(() =>
             this.UseServiceAsync(service => service.StartConversationAsync(Guid.NewGuid(), Guid.NewGuid(), question!)));
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(ConversationService.MaxTopK + 1)]
+    public async Task StartConversationAsyncTopKOutOfRangeThrowsArgumentException(int topK) =>
+        _ = await Assert.ThrowsAsync<ArgumentException>(() =>
+            this.UseServiceAsync(service => service.StartConversationAsync(Guid.NewGuid(), Guid.NewGuid(), "What is DocMind?", topK)));
+
+    [Fact]
+    public async Task StartConversationAsyncQuestionTooLongThrowsArgumentException() =>
+        _ = await Assert.ThrowsAsync<ArgumentException>(() =>
+            this.UseServiceAsync(service => service.StartConversationAsync(
+                Guid.NewGuid(), Guid.NewGuid(), new string('a', ConversationService.MaxQuestionLength + 1))));
+
     [Fact]
     public async Task StartConversationAsyncStoresQuestionAnswerAndSources()
     {
