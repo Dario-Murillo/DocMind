@@ -261,6 +261,27 @@ public class ConversationServiceTests(DocMindApiFactory factory)
         Assert.Equal("manual.pdf", source.FileName);
     }
 
+    [Fact]
+    public async Task StartConversationAsyncDocumentDeletedWhileAnsweringDropsItsSourcesAndStoresAnswer()
+    {
+        var userId = await factory.CreateUserAsync();
+        var notebookId = await factory.SeedNotebookAsync(userId);
+        var documentId = await factory.SeedDocumentAsync(userId, "manual.pdf", notebookId: notebookId);
+
+        // The second source points at a document that no longer exists: it was found by the search
+        // and then deleted while the model was generating the answer.
+        var exchange = await this.UseServiceAsync(
+            service => service.StartConversationAsync(userId, notebookId, "What is DocMind?"),
+            new FakeQueryService([SourceFrom(documentId), SourceFrom(Guid.NewGuid(), sequenceNumber: 1)]));
+
+        var conversation = await this.UseServiceAsync(service => service.GetConversationAsync(userId, exchange.Conversation.Id));
+        Assert.NotNull(conversation);
+        var answer = conversation.Messages[1];
+        Assert.Equal(Answer, answer.Content);
+        var source = Assert.Single(answer.Sources);
+        Assert.Equal(documentId, source.DocumentId);
+    }
+
     private static ScoredChunk SourceFrom(
         Guid documentId,
         int sequenceNumber = 0,
