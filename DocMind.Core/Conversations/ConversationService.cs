@@ -106,6 +106,9 @@ public class ConversationService(IQueryService queryService, DocMindDbContext db
             .ToDictionaryAsync(document => document.Id, document => document.FileName);
 
         return [.. scoredChunks
+            // A document can be deleted while the model is answering. Its chunks are dropped instead of
+            // cited: a source pointing at it would fail the foreign key and lose the whole answer.
+            .Where(scored => fileNames.ContainsKey(scored.Chunk.DocumentId))
             .Select(scored => new MessageSource
             {
                 DocumentId = scored.Chunk.DocumentId,
