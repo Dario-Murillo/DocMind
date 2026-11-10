@@ -60,6 +60,31 @@ public class DocumentServiceTests(DocMindApiFactory factory)
     }
 
     [Fact]
+    public async Task IndexDocumentAsyncFileThatIsNotAPdfThrowsNoExtractableTextException()
+    {
+        var userId = await factory.CreateUserAsync();
+        var notebookId = await factory.SeedNotebookAsync(userId);
+
+        var ex = await Assert.ThrowsAsync<NoExtractableTextException>(() =>
+            this.IndexAsync(userId, notebookId, Encoding.ASCII.GetBytes("not a pdf"), "renamed.pdf"));
+
+        Assert.Contains("could not be read as a PDF", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task IndexDocumentAsyncPasswordProtectedPdfThrowsNoExtractableTextException()
+    {
+        var userId = await factory.CreateUserAsync();
+        var notebookId = await factory.SeedNotebookAsync(userId);
+        var pdf = BuildMinimalPdf("Secret", PasswordProtection);
+
+        var ex = await Assert.ThrowsAsync<NoExtractableTextException>(() =>
+            this.IndexAsync(userId, notebookId, pdf, "locked.pdf"));
+
+        Assert.Contains("password-protected", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task IndexDocumentAsyncValidPdfStoresDocumentFileAndChunks()
     {
         var userId = await factory.CreateUserAsync();
@@ -178,6 +203,11 @@ public class DocumentServiceTests(DocMindApiFactory factory)
         Assert.False(await assertContext.DocumentChunks.AnyAsync(chunk => chunk.UserId == userId));
     }
 
+    // A Standard security handler whose password hashes match no password, so PdfPig can't open the
+    // file without one: what a password-protected PDF looks like to DocMind.
+    private static readonly string PasswordProtection =
+        $"/Encrypt << /Filter /Standard /V 1 /R 2 /O <{new string('A', 64)}> /U <{new string('A', 64)}> /P -4 >> /ID [<{new string('A', 64)}> <{new string('A', 64)}>] ";
+
     private static DocumentService CreateService(
         DocMindDbContext dbContext,
         IEmbeddingService? embeddingService = null,
@@ -187,7 +217,7 @@ public class DocumentServiceTests(DocMindApiFactory factory)
     // Hand-built minimal single-page PDF (no external PDF-generation library available):
     // header, five direct objects (Catalog, Pages, Page, Font, content stream) and a
     // byte-accurate xref/trailer, verified against a real PdfPig parse.
-    private static byte[] BuildMinimalPdf(string content)
+    private static byte[] BuildMinimalPdf(string content, string trailerEntries = "")
     {
         var obj1 = "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
         var obj2 = "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n";
@@ -220,7 +250,7 @@ public class DocumentServiceTests(DocMindApiFactory factory)
             WriteAscii($"{offsets[i]:D10} 00000 n \n");
         }
 
-        WriteAscii($"trailer\n<< /Size {objectCount} /Root 1 0 R >>\nstartxref\n{xrefOffset}\n%%EOF");
+        WriteAscii($"trailer\n<< /Size {objectCount} /Root 1 0 R {trailerEntries}>>\nstartxref\n{xrefOffset}\n%%EOF");
 
         return ms.ToArray();
     }

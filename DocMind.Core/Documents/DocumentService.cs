@@ -9,6 +9,8 @@ using DocMind.Core.Notebooks;
 using Microsoft.EntityFrameworkCore;
 using Pgvector;
 using UglyToad.PdfPig;
+using UglyToad.PdfPig.Core;
+using UglyToad.PdfPig.Exceptions;
 
 public class DocumentService(
     IChunkingService chunkingService,
@@ -54,7 +56,7 @@ public class DocumentService(
             throw new DuplicateDocumentException($"'{fileName}' has already been uploaded as '{existingFileName}'.");
         }
 
-        var text = ExtractText(content);
+        var text = ExtractText(content, fileName);
         if (string.IsNullOrWhiteSpace(text))
         {
             throw new NoExtractableTextException(
@@ -131,16 +133,32 @@ public class DocumentService(
         return buffer.ToArray();
     }
 
-    private static string ExtractText(byte[] pdfContent)
+    // PdfPig's exceptions derive straight from Exception, so without this a damaged or locked file
+    // would reach the API as a 500. They're the file's fault, not the server's: 422, like a PDF
+    // without text.
+    private static string ExtractText(byte[] pdfContent, string fileName)
     {
-        using var document = PdfDocument.Open(pdfContent);
-
-        var textBuilder = new StringBuilder();
-        foreach (var page in document.GetPages())
+        try
         {
-            _ = textBuilder.AppendLine(page.Text);
-        }
+            using var document = PdfDocument.Open(pdfContent);
 
-        return textBuilder.ToString();
+            var textBuilder = new StringBuilder();
+            foreach (var page in document.GetPages())
+            {
+                _ = textBuilder.AppendLine(page.Text);
+            }
+
+            return textBuilder.ToString();
+        }
+        catch (PdfDocumentEncryptedException ex)
+        {
+            throw new NoExtractableTextException(
+                $"'{fileName}' is password-protected. Remove the password and upload it again.", ex);
+        }
+        catch (PdfDocumentFormatException ex)
+        {
+            throw new NoExtractableTextException(
+                $"'{fileName}' could not be read as a PDF. The file may be damaged or not a PDF at all.", ex);
+        }
     }
 }
